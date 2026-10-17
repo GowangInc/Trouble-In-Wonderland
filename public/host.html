@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#263b3b">
+  <meta name="description" content="Teacher’s live overview of every Trouble in Wonderland classroom game.">
+  <title>All games · Trouble in Wonderland</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/host.css">
+  <script type="module" src="/host.js"></script>
+</head>
+<body class="host-dashboard">
+  <a class="skip-link" href="#games-title">Skip to live games</a>
+  <header class="masthead">
+    <a class="wordmark" href="/host" aria-label="Trouble in Wonderland all games"><span class="brand-title">Trouble in Wonderland</span></a>
+    <div class="header-meta"><span class="role-badge">Teacher · all games</span><div id="connection" class="connection" role="status"><span class="status-dot" aria-hidden="true"></span><span id="connection-label">Connecting…</span></div></div>
+  </header>
+  <main class="dashboard-layout">
+    <section class="dashboard-intro" aria-labelledby="dashboard-title">
+      <div><p class="eyebrow">The Queen’s classroom</p><h1 id="dashboard-title">Every table, one garden</h1><p>Students automatically reserve a place at the oldest waiting table, then choose an available character. This overview watches without taking a place.</p></div>
+      <p id="games-summary" class="dashboard-total" role="status">Waiting for live tables…</p>
+    </section>
+    <p id="stale-notice" class="stale-notice" role="status">Connecting to the host. Controls are unavailable until a fresh overview arrives.</p>
+    <p id="error-message" class="error-message" role="alert" hidden></p>
+    <div class="dashboard-tools">
+      <section class="panel table-setup" aria-labelledby="setup-title">
+        <h2 id="setup-title">Prepare the next table</h2>
+        <p class="small-note">New tables use the chapter defaults. Existing games keep their own chapters; open a game to change its settings.</p>
+        <details id="defaults-details">
+          <summary>Chapter defaults <span id="defaults-count">Waiting for the host…</span></summary>
+          <form id="defaults-form">
+            <fieldset id="defaults-fieldset" disabled>
+              <legend>Select chapters for new games</legend>
+              <div class="chapter-shortcuts"><button id="defaults-all" type="button">Select all</button><button id="defaults-none" type="button">Clear</button></div>
+              <div id="defaults-options" class="chapter-options"></div>
+              <button id="save-defaults" class="button button-outline" type="submit" disabled>Save chapter defaults</button>
+            </fieldset>
+          </form>
+        </details>
+        <form id="create-form">
+          <fieldset id="create-fieldset" disabled>
+            <label for="game-name">Table name <span class="small-note">(optional)</span></label>
+            <div class="create-fields"><input id="game-name" name="name" type="text" maxlength="80" placeholder="Let the host name this table" autocomplete="off"><button id="create-game" class="button button-primary" type="submit" disabled>Create game</button></div>
+          </fieldset>
+        </form>
+        <p id="action-status" class="small-note" role="status">Waiting for the live connection.</p>
+      </section>
+      <div class="dashboard-sharing">
+        <section class="sound-panel panel" aria-label="Game sound">
+          <div class="sound-actions"><button id="sound-toggle" class="button button-outline" type="button" aria-pressed="false">Enable sound</button><button id="sound-test" class="button button-outline" type="button">Test sound</button></div>
+          <p id="sound-status" class="sound-status small-note" role="status">Enable sound in this browser to hear every team’s dice, footsteps and bumps.</p>
+        </section>
+        <details id="invite-panel" class="share-panel panel" hidden>
+          <summary>Invite players · classroom join QR</summary>
+          <div class="share-content">
+            <h2>Join this classroom game</h2>
+            <p class="small-note">Students: connect to the host’s local network, then scan this classroom QR or open the address below. Keep the host’s game running.</p>
+            <p id="invite-status" class="small-note" role="status">Open this panel to find the classroom address.</p>
+            <div id="invite-addresses" hidden><label for="invite-select">Classroom network address</label><select id="invite-select" aria-describedby="invite-status"></select></div>
+            <div id="invite-code" class="qr-porcelain" hidden><div id="invite-qr" class="qr-code"></div></div>
+            <label id="invite-url-label" for="invite-url" hidden>Student join URL · select to copy manually</label>
+            <input id="invite-url" class="share-url" type="text" readonly hidden spellcheck="false">
+            <div class="share-actions"><button id="invite-copy" class="button button-outline" type="button" disabled>Copy join URL</button><button id="invite-expand" class="button button-outline" type="button" disabled>Enlarge join QR</button><button id="invite-refresh" class="button button-quiet" type="button">Refresh addresses</button></div>
+          </div>
+        </details>
+        <details id="project-panel" class="share-panel panel">
+          <summary>Project on GitHub · link &amp; QR</summary>
+          <div class="share-content">
+            <h2>The game’s source project</h2>
+            <p class="small-note">This QR opens the game’s GitHub source project, not the classroom game. Use the separate classroom join QR to play with your teacher.</p>
+            <a id="project-link" class="project-link" href="https://github.com/GowangInc/Trouble-In-Wonderland" target="_blank" rel="noopener noreferrer">github.com/GowangInc/Trouble-In-Wonderland (new tab)</a>
+            <div class="qr-porcelain"><div id="project-qr" class="qr-code"></div></div>
+            <p id="project-status" class="small-note" role="status"></p>
+            <button id="project-expand" class="button button-outline" type="button" disabled>Enlarge project QR</button>
+            <p class="small-note qr-attribution">Offline QR encoding: qrcode-generator 1.4.4 © Kazuhiko Arase, MIT license.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+    <section class="games-section" aria-labelledby="games-title">
+      <div class="games-heading"><h2 id="games-title" tabindex="-1">Live games</h2><p class="small-note">Observer boards · open a game for questions and teacher controls</p></div>
+      <p id="empty-games" class="panel" hidden>No tables yet. Create a game above, or let the first student open the classroom link.</p>
+      <div id="games-grid" class="games-grid" aria-busy="true"></div>
+    </section>
+  </main>
+  <dialog id="qr-dialog" class="qr-dialog" aria-labelledby="qr-dialog-title" aria-describedby="qr-dialog-description">
+    <form method="dialog"><button class="button button-outline" autofocus>Close QR</button></form>
+    <h2 id="qr-dialog-title"></h2>
+    <p id="qr-dialog-description"></p>
+    <div class="qr-porcelain"><div id="dialog-qr" class="qr-code"></div></div>
+    <p id="qr-dialog-url" class="project-link"></p>
+  </dialog>
+  <noscript><p class="no-script">JavaScript is needed to connect to the host and display live game boards.</p></noscript>
+</body>
+</html>

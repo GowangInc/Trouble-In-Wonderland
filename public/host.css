@@ -1,0 +1,77 @@
+.host-dashboard { height: auto; min-height: 100vh; min-height: 100dvh; }
+.host-dashboard .masthead { gap: 20px; }
+.host-dashboard .wordmark { min-height: 44px; }
+.dashboard-layout { width: 100%; max-width: 2000px; margin-inline: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+.dashboard-intro { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 24px; border-radius: 12px; background: linear-gradient(120deg, #435d59f5, #304644eb); box-shadow: 0 8px 28px #18282835; }
+.dashboard-intro h1 { font-size: clamp(30px, 4vw, 46px); margin-block: 4px 12px; }
+.dashboard-intro p:not(.eyebrow) { max-width: 75ch; }
+.dashboard-total { color: var(--brass); font-weight: 600; flex: 0 0 210px; }
+.stale-notice { padding: 14px 18px; background: #72573a; color: #fff3d9; border-radius: 8px; }
+.dashboard-tools { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.table-setup { display: flex; flex-direction: column; gap: 12px; }
+.table-setup details { background: #ffffff08; border-radius: 6px; padding-inline: 12px; }
+.table-setup summary { font-weight: 600; }
+#defaults-count { color: var(--muted); font-size: 14px; font-weight: 400; margin-left: 8px; }
+#defaults-form { padding-bottom: 12px; }
+#defaults-fieldset legend { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+#defaults-options { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+#defaults-options .chapter-option { align-items: flex-start; padding-block: 10px; line-height: 1.4; }
+#defaults-options input { margin-top: 2px; }
+#create-form label { display: block; margin-bottom: 8px; }
+.create-fields { display: flex; gap: 8px; }
+#game-name { width: 100%; min-width: 0; min-height: 48px; border: 1px solid #b5c2b1; padding: 10px 12px; border-radius: 5px; color: #263b3b; background: #fff3d9; }
+#game-name::placeholder { color: #52625b; opacity: 1; }
+#game-name:disabled { opacity: .65; }
+.create-fields button { flex-shrink: 0; }
+.dashboard-sharing { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.games-section { display: flex; flex-direction: column; gap: 16px; }
+.games-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px 20px; }
+.games-heading h2 { font-size: 30px; }
+.games-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; align-items: start; }
+.game-card { min-width: 0; padding: 16px; border-radius: 12px; background: linear-gradient(145deg, #405b57f5, #263b3bfa 68%); box-shadow: 0 8px 28px #18282855; }
+.game-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.game-card h3 { font-size: 26px; overflow-wrap: anywhere; }
+.game-state { display: inline-flex; align-items: center; min-height: 28px; padding: 3px 9px; border-radius: 5px; background: #e7ddbd; color: #263b3b; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.game-card[data-phase="playing"] .game-state { background: #c1edca; }
+.game-card[data-phase="paused"] .game-state { background: #ffe0b5; }
+.game-card[data-phase="finished"] .game-state { background: #dfc6ed; }
+.game-stale { color: var(--danger); font-weight: 600; margin-bottom: 8px; }
+.game-reservations, .game-chapters { font-size: 14px; color: var(--muted); }
+.game-countdown { color: var(--brass); min-height: 24px; margin-block: 4px 10px; font-variant-numeric: tabular-nums; }
+.overview-board { position: relative; width: 100%; height: clamp(240px, 28vw, 440px); border-radius: 8px; isolation: isolate; overflow: hidden; background: url('/assets/wonderland-garden-v2.png') center / cover, #557a78; }
+.overview-board canvas { display: block; width: 100%; height: 100%; }
+.overview-board-status { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.game-turn-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-block: 12px; }
+.game-turn { font-size: 17px; font-weight: 600; }
+.game-die { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; border-radius: 8px; background: linear-gradient(135deg, #fff3d9, #d8c69e); color: #263b3b; font-family: Georgia, serif; font-size: 30px; box-shadow: 2px 3px 0 #1b2929; }
+.game-message { margin: 0 0 12px; font-size: 14px; }
+.overview-teams { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 6px; }
+.overview-team { display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; border-radius: 5px; background: #ffffff08; }
+.overview-team[aria-current="step"] { background: #e7ddbd20; }
+.overview-team strong { color: var(--ink); font-size: 15px; }
+.overview-team span { color: var(--muted); font-size: 13px; }
+.game-chapters { margin-bottom: 12px; }
+.game-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.game-actions a { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; flex: 1; }
+.game-actions button { flex: 1; }
+.game-card.is-stale .game-state { background: #ffd0ca; }
+.game-card.is-stale .overview-board { filter: saturate(.65); }
+@media (min-width: 1500px) { .games-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .dashboard-layout { padding: 12px; gap: 16px; }
+  .host-dashboard .masthead { align-items: flex-start; gap: 8px; padding: 8px 12px; }
+  .host-dashboard .brand-title { white-space: normal; font-size: 24px; }
+  .host-dashboard .header-meta { max-width: 40%; padding-block: 6px; }
+  .dashboard-intro { flex-direction: column; align-items: flex-start; gap: 12px; padding: 18px; }
+  .dashboard-total { flex: auto; }
+  .dashboard-tools, .games-grid { grid-template-columns: minmax(0, 1fr); }
+  .game-card { padding: 12px; }
+  .overview-board { height: clamp(240px, 70vw, 420px); }
+  .create-fields { flex-direction: column; }
+  .game-card h3 { font-size: 24px; }
+}
+@media (max-width: 400px) { #defaults-options { grid-template-columns: minmax(0, 1fr); } }
+@media (forced-colors: active) {
+  .game-card, .dashboard-intro, .stale-notice, .game-state, .game-die { border: 1px solid CanvasText; }
+  .overview-team[aria-current="step"] { outline: 1px solid Highlight; }
+}

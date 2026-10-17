@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#263b3b">
+  <meta name="description" content="Trouble in Wonderland: a shared four-team board game with chapter comprehension questions.">
+  <title>Trouble in Wonderland</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#turn-title">Skip to game actions</a>
+  <header class="masthead">
+    <a class="wordmark" href="/" aria-label="Trouble in Wonderland home"><span class="brand-title">Trouble in Wonderland</span></a>
+    <div class="header-meta"><a id="all-games" href="/host" hidden>All games</a><span id="role-badge" class="role-badge">Your classroom game</span><div id="connection" class="connection" role="status"><span class="status-dot" aria-hidden="true"></span><span id="connection-label">Connecting…</span></div></div>
+  </header>
+
+  <main class="game-layout">
+    <section class="board-column" aria-labelledby="board-title">
+      <div class="board-heading">
+        <h1 id="board-title">The Queen’s garden</h1><span>Enter on 2, 4 or 6</span>
+      </div>
+      <div class="board-frame">
+        <div id="board-viewport" aria-label="Illustrated Wonderland game board. Use the piece buttons or text board for keyboard play." aria-describedby="board-status"></div>
+      </div>
+      <div class="board-caption"><p id="board-status" role="status">Opening the illustrated garden…</p></div>
+    </section>
+
+    <aside class="play-column" aria-label="Game actions and table settings">
+      <p id="error-message" class="error-message" role="alert" hidden></p>
+      <p id="turn-announcement" class="sr-only" role="status" aria-atomic="true"></p>
+      <section class="assignment-panel panel" aria-labelledby="assigned-game">
+        <p class="eyebrow">Classroom table</p>
+        <h2 id="assigned-game">Reserving your game place…</h2>
+        <p id="game-members" class="small-note"></p>
+        <p id="game-countdown" class="small-note" hidden></p>
+      </section>
+      <section class="turn-card panel" aria-labelledby="turn-title">
+        <div class="turn-topline"><p id="turn-step" class="eyebrow">Waiting to begin</p><span id="turn-badge" class="turn-badge">LOBBY</span></div>
+        <div class="turn-heading"><h2 id="turn-title" tabindex="-1">A seat at the table</h2><div id="die" class="die" role="img" aria-label="No roll yet">—</div></div>
+        <p id="game-message" class="game-message">Connecting to the shared garden…</p>
+        <p id="die-caption" class="sr-only">The die rests.</p>
+        <div id="controls" class="controls"></div>
+      </section>
+
+      <section class="sound-panel panel" aria-label="Game sound">
+        <div class="sound-actions"><button id="sound-toggle" class="button button-outline" type="button" aria-pressed="false">Enable sound</button><button id="sound-test" class="button button-outline" type="button">Test sound</button></div>
+        <p id="sound-status" class="sound-status small-note" role="status">Enable sound in this browser to hear every team’s dice, footsteps and bumps.</p>
+      </section>
+
+      <details id="table-details" class="table-details" open>
+        <summary><span id="table-summary">Join &amp; table settings</span><span class="table-summary-hint">Teams · board · help</span></summary>
+        <div class="table-panels">
+      <section id="seat-card" class="seat-card panel" aria-labelledby="join-title">
+        <span id="seat-mark" class="seat-portrait" aria-hidden="true"></span>
+        <h2 id="join-title" tabindex="-1">Choose your character</h2>
+        <details id="seat-details" open>
+          <summary>Seat &amp; connection details</summary>
+          <form id="join-form"><label class="sr-only" for="team-select">Choose an available character in your assigned game</label><div class="join-fields"><select id="team-select" name="teamId" aria-describedby="join-note" disabled><option value="">Waiting for your game…</option></select><button id="join-button" class="button button-primary" type="submit" disabled>Choose</button></div></form>
+          <p id="join-note" class="small-note">Your game place is reserved automatically. Then choose an available character.</p>
+        </details>
+      </section>
+
+      <section id="host-panel" class="host-card panel" aria-labelledby="host-title" hidden>
+        <h2 id="host-title">Teacher controls</h2>
+        <p id="host-note" class="small-note">Chapter choices save automatically. The countdown assigns unchosen characters and fills unreserved places with computer players.</p>
+        <div class="host-actions"><button id="go-button" class="button button-primary" type="button" disabled>Go</button><button id="pause-button" class="button button-outline" type="button" hidden>Pause</button></div>
+        <details id="host-details"><summary>Chapters &amp; game settings</summary>
+          <details id="chapter-details"><summary>Chapters in play <span id="chapter-count">12 selected</span></summary><fieldset id="chapter-fieldset"><legend class="sr-only">Select chapters for comprehension questions</legend><div class="chapter-shortcuts"><button id="chapters-all" type="button">Select all</button><button id="chapters-none" type="button">Clear</button></div><div id="chapter-options" class="chapter-options"></div></fieldset></details>
+          <div class="host-actions"><button id="end-button" class="button button-quiet" type="button" hidden>End game</button><button id="reset-button" class="button button-quiet" type="button" disabled>Reset game</button></div>
+        </details>
+      </section>
+      <section class="board-settings panel" aria-labelledby="board-settings-title">
+        <h2 id="board-settings-title">Board view</h2>
+        <div class="board-toolbar"><div class="view-controls" role="group" aria-label="Board controls"><button id="camera-reset" type="button">Reset view</button></div></div>
+        <details class="region-legend"><summary>The four Wonderland areas</summary><ul><li><span class="region-swatch garden" aria-hidden="true"></span>Rabbit-Hole Garden · blue garden gates</li><li><span class="region-swatch court" aria-hidden="true"></span>White Rabbit’s Court · amber watches</li><li><span class="region-swatch wood" aria-hidden="true"></span>Cheshire Wood · plum mushrooms</li><li><span class="region-swatch tea" aria-hidden="true"></span>Mad Tea Party · sage teacups</li></ul><p class="small-note">One clockwise route. The areas change the scenery, not the rules; only the marked starts are protected.</p></details>
+      </section>
+
+      <details class="players-card panel"><summary><span id="players-title">Teams</span><span id="player-count" class="small-note">0 / 4 reserved</span></summary><ol id="players" class="players-list"></ol></details>
+      <details class="text-board panel" id="text-board"><summary>Text board &amp; piece positions</summary><p>The board spaces are unnumbered. This summary counts track positions clockwise from Alice’s start, from 1–40; protected starts are 1, 11, 21 and 31. Each team then has four distinct safe spots. A piece that reaches one stays safe and cannot move again. All game actions are also available in the turn panel.</p><div class="table-scroll"><table><caption class="sr-only">Every team’s current piece positions</caption><thead><tr><th scope="col">Team</th><th scope="col">Piece 1</th><th scope="col">Piece 2</th><th scope="col">Piece 3</th><th scope="col">Piece 4</th></tr></thead><tbody id="board-positions"></tbody></table></div></details>
+      <details class="rules-card panel"><summary>How to play</summary><ol><li><strong>Enter on 2, 4 or 6.</strong> Bring a piece out without a question only if its protected start is empty. Every successful entry earns another roll. Or answer to move a piece already on the board.</li><li><strong>Choose, then answer.</strong> Lock in a legal piece before its comprehension question. A correct answer moves it forward; a wrong answer moves it backward by the die value, stopping at its start. A blocked backward landing leaves it in place.</li><li><strong>Mind your landing.</strong> Capture rivals on ordinary stones. Protected starts cannot be shared; your own pieces cannot stack. Land exactly on any free safe spot without overshooting the fourth. Passing an occupied safe spot is allowed.</li><li><strong>Four safe wins.</strong> Park one piece in each of your four safe spots to win. Safe pieces cannot move or be captured. A correct on-board move on a six also earns another roll; a wrong answer always ends your turn.</li></ol><p>The host chooses chapters and can pause the whole table. Computer players fill empty seats at Go.</p><p class="small-note">Based on Lewis Carroll’s Wonderland.</p></details>
+        </div>
+      </details>
+
+      <details id="invite-panel" class="share-panel panel" hidden>
+        <summary>Invite players · classroom join QR</summary>
+        <div class="share-content">
+          <h2>Join a classroom game</h2>
+          <p class="small-note">Students: connect to the host’s local network, then scan this QR or open the address below. Your game place is assigned automatically, then you choose an available character. Keep the classroom server running.</p>
+          <p id="invite-status" class="small-note" role="status">Open this panel to find the classroom address.</p>
+          <div id="invite-addresses" hidden><label for="invite-select">Classroom network address</label><select id="invite-select" aria-describedby="invite-status"></select></div>
+          <div id="invite-code" class="qr-porcelain" hidden><div id="invite-qr" class="qr-code"></div></div>
+          <label id="invite-url-label" for="invite-url" hidden>Student join URL · select to copy manually</label>
+          <input id="invite-url" class="share-url" type="text" readonly hidden spellcheck="false">
+          <div class="share-actions"><button id="invite-copy" class="button button-outline" type="button" disabled>Copy join URL</button><button id="invite-expand" class="button button-outline" type="button" disabled>Enlarge join QR</button><button id="invite-refresh" class="button button-quiet" type="button">Refresh addresses</button></div>
+        </div>
+      </details>
+      <details id="project-panel" class="share-panel panel">
+        <summary>Project on GitHub · link &amp; QR</summary>
+        <div class="share-content">
+          <h2>The game’s source project</h2>
+          <p class="small-note">This QR opens the game’s GitHub source project, not the classroom game. Use the separate classroom join QR to play with your teacher.</p>
+          <a id="project-link" class="project-link" href="https://github.com/GowangInc/Trouble-In-Wonderland" target="_blank" rel="noopener noreferrer">github.com/GowangInc/Trouble-In-Wonderland (new tab)</a>
+          <div class="qr-porcelain"><div id="project-qr" class="qr-code"></div></div>
+          <p id="project-status" class="small-note" role="status"></p>
+          <button id="project-expand" class="button button-outline" type="button" disabled>Enlarge project QR</button>
+          <p class="small-note qr-attribution">Offline QR encoding: qrcode-generator 1.4.4 © Kazuhiko Arase, MIT license.</p>
+        </div>
+      </details>
+    </aside>
+  </main>
+  <dialog id="qr-dialog" class="qr-dialog" aria-labelledby="qr-dialog-title" aria-describedby="qr-dialog-description">
+    <form method="dialog"><button class="button button-outline" autofocus>Close QR</button></form>
+    <h2 id="qr-dialog-title"></h2>
+    <p id="qr-dialog-description"></p>
+    <div class="qr-porcelain"><div id="dialog-qr" class="qr-code"></div></div>
+    <p id="qr-dialog-url" class="project-link"></p>
+  </dialog>
+  <noscript><p class="no-script">JavaScript is needed to connect to the game and display the illustrated board.</p></noscript>
+</body>
+</html>

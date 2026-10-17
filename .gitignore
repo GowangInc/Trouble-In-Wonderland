@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+.env
+.env.*
+*.key
+*.pem
+*.log
+.stitch/
+/public/assets/*-v1.png
