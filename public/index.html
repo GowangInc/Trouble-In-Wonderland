@@ -28,20 +28,27 @@
     </section>
 
     <aside class="play-column" aria-label="Game actions and table settings">
-      <p id="error-message" class="error-message" role="alert" hidden></p>
       <p id="turn-announcement" class="sr-only" role="status" aria-atomic="true"></p>
+      <section class="turn-card panel" aria-labelledby="turn-title">
+        <div class="action-dock" aria-label="Die and decision timer">
+          <button id="roll-button" class="button button-primary" type="button" data-control="roll" aria-describedby="action-countdown" disabled>Roll the die</button>
+          <div id="die" class="die" role="img" aria-label="No roll yet">—</div>
+          <p id="action-countdown" class="action-countdown" role="timer" aria-live="off">Connecting…</p>
+        </div>
+        <div class="turn-body" role="region" aria-label="Current turn instructions and choices" tabindex="0">
+          <div class="turn-topline"><p id="turn-step" class="eyebrow">Waiting to begin</p><span id="turn-badge" class="turn-badge">LOBBY</span></div>
+          <div class="turn-heading"><h2 id="turn-title" tabindex="-1">A seat at the table</h2></div>
+          <p id="game-message" class="game-message">Connecting to the shared garden…</p>
+          <p id="die-caption" class="sr-only">The die rests.</p>
+          <div id="controls" class="controls"></div>
+          <p id="error-message" class="error-message" role="alert" hidden></p>
+        </div>
+      </section>
       <section class="assignment-panel panel" aria-labelledby="assigned-game">
         <p class="eyebrow">Classroom table</p>
         <h2 id="assigned-game">Reserving your game place…</h2>
         <p id="game-members" class="small-note"></p>
         <p id="game-countdown" class="small-note" hidden></p>
-      </section>
-      <section class="turn-card panel" aria-labelledby="turn-title">
-        <div class="turn-topline"><p id="turn-step" class="eyebrow">Waiting to begin</p><span id="turn-badge" class="turn-badge">LOBBY</span></div>
-        <div class="turn-heading"><h2 id="turn-title" tabindex="-1">A seat at the table</h2><div id="die" class="die" role="img" aria-label="No roll yet">—</div></div>
-        <p id="game-message" class="game-message">Connecting to the shared garden…</p>
-        <p id="die-caption" class="sr-only">The die rests.</p>
-        <div id="controls" class="controls"></div>
       </section>
 
       <section class="sound-panel panel" aria-label="Game sound">
@@ -74,12 +81,12 @@
       <section class="board-settings panel" aria-labelledby="board-settings-title">
         <h2 id="board-settings-title">Board view</h2>
         <div class="board-toolbar"><div class="view-controls" role="group" aria-label="Board controls"><button id="camera-reset" type="button">Reset view</button></div></div>
-        <details class="region-legend"><summary>The four Wonderland areas</summary><ul><li><span class="region-swatch garden" aria-hidden="true"></span>Rabbit-Hole Garden · blue garden gates</li><li><span class="region-swatch court" aria-hidden="true"></span>White Rabbit’s Court · amber watches</li><li><span class="region-swatch wood" aria-hidden="true"></span>Cheshire Wood · plum mushrooms</li><li><span class="region-swatch tea" aria-hidden="true"></span>Mad Tea Party · sage teacups</li></ul><p class="small-note">One clockwise route. The areas change the scenery, not the rules; only the marked starts are protected.</p></details>
+        <details class="region-legend"><summary>The four Wonderland areas</summary><ul><li><span class="region-swatch garden" aria-hidden="true"></span>Rabbit-Hole Garden · blue garden gates</li><li><span class="region-swatch court" aria-hidden="true"></span>White Rabbit’s Court · amber watches</li><li><span class="region-swatch wood" aria-hidden="true"></span>Cheshire Wood · plum mushrooms</li><li><span class="region-swatch tea" aria-hidden="true"></span>Mad Tea Party · sage teacups</li></ul><p class="small-note">One clockwise route. The areas change the scenery, not the rules. Opponents can be bumped on every route stone, including marked entries; only the final safe spots are safe from capture.</p></details>
       </section>
 
       <details class="players-card panel"><summary><span id="players-title">Teams</span><span id="player-count" class="small-note">0 / 4 reserved</span></summary><ol id="players" class="players-list"></ol></details>
-      <details class="text-board panel" id="text-board"><summary>Text board &amp; piece positions</summary><p>The board spaces are unnumbered. This summary counts track positions clockwise from Alice’s start, from 1–40; protected starts are 1, 11, 21 and 31. Each team then has four distinct safe spots. A piece that reaches one stays safe and cannot move again. All game actions are also available in the turn panel.</p><div class="table-scroll"><table><caption class="sr-only">Every team’s current piece positions</caption><thead><tr><th scope="col">Team</th><th scope="col">Piece 1</th><th scope="col">Piece 2</th><th scope="col">Piece 3</th><th scope="col">Piece 4</th></tr></thead><tbody id="board-positions"></tbody></table></div></details>
-      <details class="rules-card panel"><summary>How to play</summary><ol><li><strong>Enter on 2, 4 or 6.</strong> Bring a piece out without a question only if its protected start is empty. Every successful entry earns another roll. Or answer to move a piece already on the board.</li><li><strong>Choose, then answer.</strong> Lock in a legal piece before its comprehension question. A correct answer moves it forward; a wrong answer moves it backward by the die value, stopping at its start. A blocked backward landing leaves it in place.</li><li><strong>Mind your landing.</strong> Capture rivals on ordinary stones. Protected starts cannot be shared; your own pieces cannot stack. Land exactly on any free safe spot without overshooting the fourth. Passing an occupied safe spot is allowed.</li><li><strong>Four safe wins.</strong> Park one piece in each of your four safe spots to win. Safe pieces cannot move or be captured. A correct on-board move on a six also earns another roll; a wrong answer always ends your turn.</li></ol><p>The host chooses chapters and can pause the whole table. Computer players fill empty seats at Go.</p><p class="small-note">Based on Lewis Carroll’s Wonderland.</p></details>
+      <details class="text-board panel" id="text-board"><summary>Text board &amp; piece positions</summary><p>The board spaces are unnumbered. This summary counts track positions clockwise from Alice’s start, from 1–40; entry stones are 1, 11, 21 and 31. Each team then has four distinct safe spots. A piece that reaches one stays safe and cannot move again. All game actions are also available in the turn panel.</p><div class="table-scroll"><table><caption class="sr-only">Every team’s current piece positions</caption><thead><tr><th scope="col">Team</th><th scope="col">Piece 1</th><th scope="col">Piece 2</th><th scope="col">Piece 3</th><th scope="col">Piece 4</th></tr></thead><tbody id="board-positions"></tbody></table></div></details>
+      <details class="rules-card panel"><summary>How to play</summary><ol><li><strong>Enter on 2, 4 or 6.</strong> Bring a piece out without a question unless your own piece already occupies its start. An opponent there is bumped back to its garden. Every successful entry earns another roll. Or answer to move a piece already on the board.</li><li><strong>Choose, then answer.</strong> Select a legal piece to see its comprehension question. You can switch to another legal piece until you submit your answer; the question and countdown stay the same. Hover or focus a piece button to preview its destination. A correct answer moves the selected piece forward; a wrong answer leaves every piece where it is and ends the turn, including on a six.</li><li><strong>Mind your landing.</strong> Landing on an opponent on any route stone bumps it back, including entry stones. Your own pieces cannot stack. Land exactly on any free safe spot without overshooting the fourth. Passing an occupied safe spot is allowed.</li><li><strong>Four safe wins.</strong> Park one piece in each of your four safe spots to win. Safe pieces cannot move or be captured. A correct on-board move on a six also earns another roll.</li></ol><p>Each human decision has 30 seconds: the server rolls automatically, then chooses a legal action, piece, or answer at random if needed. Continue also advances automatically. The host chooses chapters and can pause the table, freezing its countdown. Computer players fill empty seats at Go.</p><p class="small-note">Based on Lewis Carroll’s Wonderland.</p></details>
         </div>
       </details>
 

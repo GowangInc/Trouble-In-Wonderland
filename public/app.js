@@ -32,6 +32,7 @@ let chapterDraft = null;
 let boardNeedsSnapshot = true;
 let dieTumble = null;
 let tablePhase = null;
+let waitingControlFocus = null;
 
 function unlockFromGesture(event) {
   if (event.isTrusted) void pageTools.enable();
@@ -88,8 +89,8 @@ function setConnection(label, kind = '') {
 }
 function positionLabel(position) {
   if (position === -1) return 'In the garden';
-  if (position >= 40 && position <= 43) return `Safe spot ${position - 39} of 4 · parked`;
-  return `Stone ${position + 1}${position % 10 === 0 ? ' · protected' : ''}`;
+  if (position >= 40 && position <= 43) return `Safe spot ${position - 39} of 4 · 80 points`;
+  return `Stone ${position + 1}${position % 10 === 0 ? ' · entry' : ''}`;
 }
 function chaptersSelected() {
   return Array.from(document.querySelectorAll('#chapter-options input:checked'), input => Number(input.value));
@@ -121,7 +122,7 @@ function allowed(type, data) {
   if (!myTurn()) return false;
   if (type === 'roll') return state.awaiting === 'roll';
   if (type === 'choose') return state.awaiting === 'choice' && (data.action === 'enter' ? state.canEnter : state.legalPieces.length > 0);
-  if (type === 'move') return state.awaiting === 'piece' && state.legalPieces.includes(data.piece);
+  if (type === 'move') return ['piece', 'answer'].includes(state.awaiting) && state.legalPieces.includes(data.piece);
   if (type === 'answer') return state.awaiting === 'answer' && state.pendingQuestion && Number.isInteger(data.index) && data.index >= 0 && data.index < state.pendingQuestion.options.length;
   return type === 'continue' && state.awaiting === 'continue';
 }
@@ -187,6 +188,20 @@ function renderAssignment() {
     message = seconds === null ? 'The 60-second countdown begins with the first reserved student place.' : seconds > 0 ? `Starts in ${seconds}s, or sooner when all four students choose characters.` : 'Ready to start when a reserved student is connected.';
     message += ' At timeout, any reserved student without a character receives an available one automatically; unreserved places become computer players.';
   }
+  const player = activePlayer();
+  let decision = 'Connecting…';
+  if (!online()) decision = state ? 'Offline · reconnecting' : 'Connecting…';
+  else if (state.phase === 'lobby') decision = 'Waiting to start';
+  else if (state.phase === 'finished') decision = 'Game finished';
+  else if (state.paused) decision = 'Paused';
+  else if (player?.isBot) decision = 'Computer turn';
+  else if (Number.isFinite(game?.actionDeadline)) {
+    const seconds = Math.max(0, Math.ceil((game.actionDeadline - Date.now() - serverOffset) / 1000));
+    const action = ({ roll: 'Auto-roll', choice: 'Random choice', piece: 'Random piece', answer: 'Random answer', continue: 'Auto-continue' })[state.awaiting] || 'Next action';
+    decision = seconds > 0 ? `${action} in ${seconds}s` : 'Time up · waiting for server';
+  } else decision = player?.connected ? 'Waiting for server' : 'Waiting for connection';
+  const countdown = $('#action-countdown');
+  if (countdown.textContent !== decision) countdown.textContent = decision;
   $('#game-countdown').textContent = message;
   $('#game-countdown').hidden = !message;
 }
@@ -209,6 +224,7 @@ function renderPlayers() {
     const status = !claimed ? 'Available to join' : player.isBot ? 'Computer player' : player.connected ? 'Human · connected' : 'Human · disconnected, seat reserved';
     identity.append(element('span', 'player-status', status));
     const progress = element('div', 'player-stats', claimed ? `${player.pieces.filter(piece => piece >= 40 && piece <= 43).length} / 4 safe` : 'Open seat');
+    if (claimed) progress.prepend(element('strong', 'player-score', `${player.score ?? 0} pts`));
     if (current) progress.append(element('span', 'player-turn', state.paused ? 'PAUSED' : 'TURN'));
     row.append(portrait, identity, progress);
     if (current) row.setAttribute('aria-current', 'step');
@@ -219,18 +235,51 @@ function renderPlayers() {
     tableRow.append(label);
     (player?.pieces || [-1, -1, -1, -1]).forEach((position, piece) => {
       const selected = current && state.awaiting === 'answer' && state.selectedPiece === piece;
-      tableRow.append(element('td', selected ? 'is-selected' : '', `${positionLabel(position)}${selected ? ' · locked for question' : ''}`));
+      tableRow.append(element('td', selected ? 'is-selected' : '', `${positionLabel(position)}${selected ? ' · selected; can change until answering' : ''}`));
     });
     positions.append(tableRow);
   });
   $('#player-count').textContent = `${game?.assignedHumans ?? humans} / 4 reserved`;
 }
+function renderPieceOptions(disabled) {
+  const player = activePlayer();
+  const team = TEAMS[state.currentPlayer];
+  const answering = state.awaiting === 'answer';
+  const grid = element('div', `piece-options${answering ? ' piece-options-answer' : ''}`);
+  grid.setAttribute('role', 'group');
+  grid.setAttribute('aria-label', 'Choose a piece; selection can change until answering');
+  for (let piece = 0; piece < 4; piece++) {
+    const legal = state.legalPieces.includes(piece);
+    const selected = state.awaiting === 'answer' && state.selectedPiece === piece;
+    const choice = button(grid, '', `piece-${piece}`, () => sendAction('move', { piece }), { disabled: disabled || !legal, className: 'button-outline piece-button' });
+    const label = element('span', 'piece-label');
+    const title = element('span', '', answering ? String(piece + 1) : `Piece ${piece + 1}`);
+    if (selected) {
+      const mark = element('span', 'piece-selected-mark', ' ✓');
+      mark.setAttribute('aria-hidden', 'true');
+      title.append(mark);
+    }
+    label.append(title, element('small', '', positionLabel(player.pieces[piece])));
+    choice.style.setProperty('--team-color', team.color);
+    choice.append(teamPortrait(team, 'piece-avatar'), label);
+    choice.setAttribute('aria-label', `Select piece ${piece + 1}, ${positionLabel(player.pieces[piece])}${legal ? '' : ', cannot move'}`);
+    choice.setAttribute('aria-pressed', String(selected));
+    const preview = () => { if (allowed('move', { piece })) board?.setPreviewPiece(piece); };
+    const clearPreview = () => board?.setPreviewPiece(null);
+    choice.addEventListener('mouseenter', preview);
+    choice.addEventListener('focus', preview);
+    choice.addEventListener('mouseleave', clearPreview);
+    choice.addEventListener('blur', clearPreview);
+  }
+  controls.append(grid);
+}
 function renderQuestion(disabled) {
   const question = state.pendingQuestion;
   if (!question) { note('Waiting for the question from the server.'); return; }
-  controls.append(element('span', 'chapter-tag', `Chapter ${question.chapter}`));
-  controls.append(element('h3', 'question-prompt', question.prompt));
-  if (Number.isInteger(state.selectedPiece)) note(`Piece ${state.selectedPiece + 1} is locked in.`, controls, 'locked-piece');
+  const metadata = element('div', 'question-meta');
+  metadata.append(element('span', 'chapter-tag', `Chapter ${question.chapter}`));
+  if (Number.isInteger(state.selectedPiece)) note(`Piece ${state.selectedPiece + 1} · switch before answering`, metadata, 'selected-piece');
+  controls.append(metadata, element('h3', 'question-prompt', question.prompt));
   question.options.forEach((option, index) => {
     const answer = button(controls, '', `answer-${index}`, () => sendAction('answer', { index }), { disabled, className: 'button-answer' });
     const letter = element('span', 'answer-letter', String.fromCharCode(65 + index));
@@ -251,6 +300,7 @@ function renderFeedback() {
   controls.append(box);
 }
 function renderControls() {
+  board?.setPreviewPiece(null);
   controls.replaceChildren();
   if (!state) { note('The garden is opening. Connect to see the live game.'); return; }
   if (!online()) {
@@ -271,29 +321,20 @@ function renderControls() {
   const player = activePlayer();
   const canAct = myTurn();
   if (state.paused) note('The host has paused the table. Your roll, selected piece and question are saved.');
-  else if (!player?.isBot && !player?.connected) note(`${player?.name || 'The active team'} is disconnected. Play waits for their reserved seat to reconnect.`);
+  else if (!player?.isBot && !player?.connected) note(`${player?.name || 'The active team'} is disconnected. Their seat stays reserved; the server handles timed decisions.`);
   else if (pendingAction) note('Waiting for the server…');
-  else if (!canAct) note(player?.isBot ? `${player.name} is a computer player. Watch their next move.` : `${player?.name || 'The current team'} is playing. ${Number.isInteger(you) ? 'Your turn will come around.' : 'Join the next game to play.'}`);
+  else if (!canAct && state.awaiting !== 'answer') note(player?.isBot ? `${player.name} is a computer player. Watch their next move.` : `${player?.name || 'The current team'} is playing. ${Number.isInteger(you) ? 'Your turn will come around.' : 'Join the next game to play.'}`);
   if (state.awaiting === 'roll') {
-    button(controls, 'Roll the die', 'roll', rollDie, { disabled: !canAct });
+    note(canAct ? 'Roll the die above to begin. Each human decision has 30 seconds before the server chooses automatically.' : 'The die is ready for the active team.');
   } else if (state.awaiting === 'choice') {
-    note(`Rolled ${state.roll}. Enter on an empty start without a question and roll again, or answer to move a piece already in play.`);
+    note(`Rolled ${state.roll}. Enter without a question and roll again, or answer to move a piece already in play. An opponent on your start is bumped back; your own piece blocks entry.`);
     button(controls, 'Enter a piece · no question', 'enter', () => sendAction('choose', { action: 'enter' }), { disabled: !canAct || !state.canEnter });
     button(controls, 'Move an on-board piece', 'choose-move', () => sendAction('choose', { action: 'move' }), { disabled: !canAct || !state.legalPieces.length, className: 'button-outline' });
   } else if (state.awaiting === 'piece') {
-    note('Choose your piece before the question. Highlighted pieces on the board do the same thing.');
-    const grid = element('div', 'piece-options');
-    controls.append(grid);
-    for (let piece = 0; piece < 4; piece++) {
-      const legal = state.legalPieces.includes(piece);
-      const choice = button(grid, '', `piece-${piece}`, () => sendAction('move', { piece }), { disabled: !canAct || !legal, className: 'button-outline piece-button' });
-      const label = element('span', 'piece-label');
-      label.append(element('span', '', `Piece ${piece + 1}`), element('small', '', positionLabel(player.pieces[piece])));
-      choice.style.setProperty('--team-color', TEAMS[state.currentPlayer].color);
-      choice.append(teamPortrait(TEAMS[state.currentPlayer], 'piece-avatar'), label);
-      choice.setAttribute('aria-label', `Select piece ${piece + 1}, ${positionLabel(player.pieces[piece])}${legal ? '' : ', cannot move'}`);
-    }
+    note('Choose a piece; you can change it until you answer. Hover or focus a piece to preview its destination.');
+    renderPieceOptions(!canAct);
   } else if (state.awaiting === 'answer') {
+    renderPieceOptions(!canAct);
     renderQuestion(!canAct);
   } else if (state.awaiting === 'continue') {
     button(controls, 'Continue', 'continue', () => sendAction('continue'), { disabled: !canAct });
@@ -331,12 +372,14 @@ function render() {
     const closingFocusedTable = nextTablePhase !== 'lobby' && tableDetails.contains(document.activeElement);
     tableDetails.open = nextTablePhase === 'lobby' || boardUnavailable;
     tablePhase = nextTablePhase;
+    if (nextTablePhase === 'playing') $('.play-column').scrollTop = 0;
     if (closingFocusedTable) $('#turn-title').focus({ preventScroll: true });
   }
   $('#table-summary').textContent = state?.phase === 'lobby' ? 'Join & table settings' : `Table & settings${Number.isInteger(you) ? ` · ${TEAMS[you].name}` : ''}`;
   $('.skip-link').setAttribute('href', online() && state.phase === 'lobby' ? '#join-title' : '#turn-title');
   const focus = document.activeElement;
-  const focusedControl = controls.contains(focus) ? focus.dataset.control : null;
+  const focusedControl = controls.contains(focus) ? focus.dataset.control : focus === $('#turn-title') ? waitingControlFocus : null;
+  waitingControlFocus = null;
   const player = activePlayer();
   let title = 'A seat at the table';
   let step = 'The adventure awaits';
@@ -357,6 +400,7 @@ function render() {
   $('#die').textContent = state?.roll ?? '—';
   $('#die').setAttribute('aria-label', state?.roll == null ? 'No roll yet' : `Die shows ${state.roll}`);
   $('#die-caption').textContent = state?.roll == null ? 'The die rests.' : `A roll of ${state.roll}.`;
+  $('#roll-button').disabled = !allowed('roll', {});
   renderJoin();
   renderPlayers();
   renderControls();
@@ -373,6 +417,7 @@ function render() {
   }
   if (focusedControl) {
     const replacement = Array.from(controls.querySelectorAll('button')).find(node => node.dataset.control === focusedControl && !node.disabled);
+    if (!replacement && pendingAction) waitingControlFocus = focusedControl;
     (replacement || $('#turn-title')).focus({ preventScroll: true });
   }
   // Turn changes update this action area in place; never move the reader’s page.
@@ -515,6 +560,7 @@ $('#join-form').addEventListener('submit', event => {
   }
 });
 teamSelect.addEventListener('change', () => { $('#join-button').disabled = !online() || busy() || you !== null || state.phase !== 'lobby' || !teamSelect.value; });
+$('#roll-button').addEventListener('click', rollDie);
 $('#go-button').addEventListener('click', event => {
   if (allowed('start', {})) unlockFromGesture(event);
   sendAction('start');

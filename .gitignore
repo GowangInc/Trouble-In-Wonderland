@@ -7,3 +7,4 @@ node_modules/
 *.log
 .stitch/
 /public/assets/*-v1.png
+/dist/

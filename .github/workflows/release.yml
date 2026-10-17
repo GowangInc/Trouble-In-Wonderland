@@ -1,0 +1,148 @@
+name: Build verified draft downloads
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag and existing draft release (e.g. v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: draft-platform-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: Native ${{ matrix.platform }} package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_PLATFORM: ${{ matrix.platform }}
+    steps:
+      - name: Validate tag spelling
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$ ]] || exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - name: Verify checked-out tag and package version
+        id: metadata
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          bun -e 'const p = await Bun.file("package.json").json(); if (`v${p.version}` !== process.env.RELEASE_TAG) throw new Error("Tag/package version mismatch");'
+          printf 'version=%s\n' "${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Source tests on native OS
+        run: bun test
+      - name: Build complete standalone ZIP
+        shell: bash
+        run: bun scripts/build-release.js "$RELEASE_PLATFORM" --version "${RELEASE_TAG#v}"
+      - name: Smoke actual extracted native executable outside checkout
+        shell: bash
+        run: |
+          suffix=x64
+          if [[ "$RELEASE_PLATFORM" = macos ]]; then suffix=universal; fi
+          bun scripts/smoke-release.js "dist/${RELEASE_TAG#v}/$RELEASE_PLATFORM/wonderland-${RELEASE_TAG#v}-$RELEASE_PLATFORM-$suffix.zip"
+      - name: Preserve verified archive and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-${{ matrix.platform }}
+          path: |
+            dist/${{ steps.metadata.outputs.version }}/${{ matrix.platform }}/*.zip
+            dist/${{ steps.metadata.outputs.version }}/${{ matrix.platform }}/*.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  macos-intel:
+    name: Smoke the same macOS archive on Intel
+    needs: native
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-macos
+          path: verified
+      - name: Source tests on Intel macOS
+        run: bun test
+      - name: Smoke extracted Intel executable
+        run: bun scripts/smoke-release.js "verified/wonderland-${RELEASE_TAG#v}-macos-universal.zip"
+
+  upload:
+    name: Upload only after every native gate succeeds
+    needs: [native, macos-intel]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: verified-*
+          path: verified
+          merge-multiple: true
+      - name: Recheck six exact artifacts and checksums
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { readdir, readFile } from 'node:fs/promises';
+          import { createHash } from 'node:crypto';
+          const version = process.env.RELEASE_TAG.slice(1);
+          const expected = ['linux-x64', 'windows-x64', 'macos-universal'].flatMap(platform => {
+            const name = `wonderland-${version}-${platform}.zip`;
+            return [name, `${name}.sha256`];
+          }).sort();
+          const files = (await readdir('verified')).sort();
+          if (JSON.stringify(files) !== JSON.stringify(expected)) throw new Error('Unexpected/missing release artifacts');
+          for (const name of files.filter(name => name.endsWith('.zip'))) {
+            const hash = createHash('sha256').update(await readFile(`verified/${name}`)).digest('hex');
+            if ((await readFile(`verified/${name}.sha256`, 'utf8')).trim() !== `${hash}  ${name}`) throw new Error(`Checksum mismatch: ${name}`);
+          }
+          JS
+      - name: Require existing draft without colliding assets; never publish
+        shell: bash
+        run: |
+          gh release view "$RELEASE_TAG" --json isDraft,tagName,assets > "$RUNNER_TEMP/draft.json"
+          node --input-type=module <<'JS'
+          import { readFile, readdir } from 'node:fs/promises';
+          const release = JSON.parse(await readFile(`${process.env.RUNNER_TEMP}/draft.json`, 'utf8'));
+          if (!release.isDraft || release.tagName !== process.env.RELEASE_TAG) throw new Error('Expected existing draft release for exact tag');
+          const names = new Set(release.assets.map(asset => asset.name));
+          for (const file of await readdir('verified')) if (names.has(file)) throw new Error(`Refusing to overwrite release asset: ${file}`);
+          JS
+          gh release upload "$RELEASE_TAG" verified/*.zip verified/*.zip.sha256

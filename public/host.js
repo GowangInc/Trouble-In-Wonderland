@@ -86,7 +86,7 @@ function gamePhase(state) {
 }
 function piecePosition(position) {
   if (position < 0) return 'home';
-  if (position >= 40) return `safe spot ${position - 39}`;
+  if (position >= 40) return `safe spot ${position - 39} · 80 pts`;
   return `stone ${position + 1}`;
 }
 function makeCard(game) {
@@ -147,7 +147,7 @@ function makeCard(game) {
         ? 'Live observer board. Open game for questions and teacher controls.'
         : status.replace('Use the HTML piece controls', 'Use the character progress summary below').replace('All HTML game controls remain available.', 'Character progress remains available below.').replace('All game controls remain available below.', 'Character progress remains available below.');
     },
-    onStep: direction => { if (fresh) tools.onStep(direction); },
+    onStep: () => { if (fresh) tools.onStep(); },
     onBump: () => { if (fresh) tools.onBump(); },
   });
   viewport.querySelector('canvas')?.setAttribute('aria-label', `Live observer board for ${game.name}. Character positions are listed below. Open game for questions and teacher controls.`);
@@ -180,7 +180,7 @@ function updateCard(card, game, initial) {
     const home = positions.filter(position => position < 0).length;
     const controller = !player?.occupied ? 'Available' : player.isBot ? 'Computer' : player.connected ? 'Student · connected' : 'Student · disconnected';
     team.name.textContent = `${name} · ${controller}`;
-    team.progress.textContent = `${safe} / 4 safe · ${positions.length - safe - home} on path · ${home} at home`;
+    team.progress.textContent = `${player?.score ?? 0} pts · ${safe} / 4 safe · ${positions.length - safe - home} on path · ${home} at home`;
     team.positions.textContent = positions.map((position, piece) => `${piece + 1}: ${piecePosition(position)}`).join(' · ');
     if (state.phase === 'playing' && state.currentPlayer === index) team.row.setAttribute('aria-current', 'step');
     else team.row.removeAttribute('aria-current');

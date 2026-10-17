@@ -51,14 +51,15 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     onStatus('The illustrated board is unavailable. All game controls remain available below.');
-    return { update() {}, resetCamera() {}, setView() {}, dispose() {} };
+    return { update() {}, resetCamera() {}, setView() {}, setPreviewPiece() {}, dispose() {} };
   }
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', "Painted Wonderland board with forty unnumbered route stones: Rabbit-Hole Garden (blue garden gates, Alice), White Rabbit's Court (amber watches, White Rabbit), Cheshire Wood (plum mushrooms, Cheshire Cat), and Mad Tea Party (sage teacups, Mad Hatter). Diamonds mark protected starts; four distinct safe destinations per team sit beside the tea table. Space and piece numbers are available in the text board and HTML controls. Choose a glowing figure by clicking it or using its piece button; a double brass ring marks the piece locked for a question.");
+  canvas.setAttribute('aria-label', "Painted Wonderland board with forty unnumbered route stones: Rabbit-Hole Garden (blue garden gates, Alice), White Rabbit's Court (amber watches, White Rabbit), Cheshire Wood (plum mushrooms, Cheshire Cat), and Mad Tea Party (sage teacups, Mad Hatter). Diamonds mark entry stones, where opponents can also be captured; four distinct safe destinations per team sit beside the tea table. Space and piece numbers are available in the text board and HTML controls. Choose a figure marked with a cream frame and downward arrow, or use its piece button; a brass frame with a checkmark and a dashed ring mark the piece selected for the current question, and a translucent dashed ghost shows where it will land. You may switch to another highlighted piece until you answer.");
   canvas.style.cssText = 'display:block;width:100%;height:100%;touch-action:pan-y;';
   container.appendChild(canvas);
   const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let state = null, you = null, frame = 0, disposed = false, initialized = false;
+  let previewPiece = null, previewKey = null;
   let width = 1, height = 1, scale = 1, offsetX = 0, offsetY = 0;
   let minimumFigureHeight = 52;
   let planeWidth = 1000, planeHeight = 1000;
@@ -81,7 +82,7 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     } else if (pending) {
       onStatus(`Loading painted Wonderland artwork (${assets.length - pending}/${assets.length}). All HTML game controls remain available.`);
     } else {
-      onStatus('Follow the garden path. Choose a glowing painted character or its piece button; a brass ring marks the piece locked for a question.');
+      onStatus('Follow the garden path. Choose a character marked with a cream frame and downward arrow, or its piece button; a brass frame, checkmark and dashed ring mark the piece selected for the question. A translucent dashed ghost previews its landing, and you may switch pieces until you answer.');
     }
     requestRender();
   }
@@ -123,7 +124,7 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     pawn.x = pawn.to.x; pawn.y = pawn.to.y;
     pawn.visualProgress = walk.waypoints[walk.index++];
     pawn.moving = false; pawn.sway = 0; pawn.bob = 0;
-    if (notify && walk.notifyStep) onStep(walk.direction);
+    if (notify && walk.notifyStep) onStep();
   }
   function bump(transition) {
     if (transition.victims.length) onBump({
@@ -141,14 +142,11 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
       const pawn = walk.pawn;
       const t = Math.min(1, Math.max(0, (time - pawn.start) / hopDuration));
       const ease = t * t * (3 - 2 * t);
-      const retreat = walk.direction < 0;
       const stride = Math.sin(t * Math.PI);
-      // Retreat recoils away from the next stone, then shuffles back with a low double hop.
-      const travel = retreat ? ease - stride * 0.2 : ease;
-      pawn.x = pawn.from.x + (pawn.to.x - pawn.from.x) * travel;
-      pawn.y = pawn.from.y + (pawn.to.y - pawn.from.y) * travel;
-      pawn.bob = retreat ? Math.abs(Math.sin(t * TAU)) * 3.5 : stride * 6;
-      pawn.sway = Math.sin(t * TAU) * (retreat ? -0.11 : 0.06);
+      pawn.x = pawn.from.x + (pawn.to.x - pawn.from.x) * ease;
+      pawn.y = pawn.from.y + (pawn.to.y - pawn.from.y) * ease;
+      pawn.bob = stride * 6;
+      pawn.sway = Math.sin(t * TAU) * 0.06;
       if (t === 1) {
         arrive(walk);
         if (walk.index < walk.waypoints.length) beginHop(walk, time);
@@ -188,7 +186,7 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     }
     transitions.length = 0;
     // One gentle arrival at most, never a simultaneous burst of skipped footsteps.
-    if (arrival) onStep(arrival.direction);
+    if (arrival) onStep();
   }
   function requestRender() { if (!frame && !disposed) frame = requestAnimationFrame(draw); }
   function ellipse(x, y, rx, ry, color, rotation = 0) {
@@ -255,7 +253,7 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     for (let i = 0; i < 40; i++) {
       const p = radial(angle(i), 335);
       const entry = i % 10 === 0 ? TEAMS[i / 10] : null;
-      stone(p.x, p.y, 46, Math.floor((i + 5) / 10) % 4, entry ? 3 : 1.5);
+      stone(p.x, p.y, 46, Math.floor(i / 10), entry ? 3 : 1.5);
       if (entry) {
         ellipse(p.x, p.y, 11, 11, '#fff1d9');
         text('◆', p.x, p.y, 18, entry.dark);
@@ -284,16 +282,73 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
       text('HTML game controls remain available', width / 2, height / 2 + 15, Math.min(13, width / 27), '#fff3d9', 'system-ui, sans-serif', '600');
     }
   }
-  function figureBounds(pawn) {
-    const asset = assets[pawn.team + 1];
-    const p = project(pawn.x, pawn.y);
-    const small = pawn.visualProgress >= 40;
+  function figureBoundsAt(team, progress, x, y, bob = 0) {
+    const asset = assets[team + 1];
+    const p = project(x, y);
+    const small = progress >= 40;
     const maxW = Math.max(small ? 26 : 34, (small ? 58 : 86) * scale);
     const maxH = Math.max(small ? minimumFigureHeight * 0.65 : minimumFigureHeight, (small ? 78 : 118) * scale);
     const factor = asset.status === 'ready' ? Math.min(maxW / asset.image.naturalWidth, maxH / asset.image.naturalHeight) : 0;
     const w = asset.image.naturalWidth * factor || 0, h = asset.image.naturalHeight * factor || 0;
-    const x = p.x, y = p.y + 9 * scale - pawn.bob * Math.max(0.65, scale);
-    return { x, y, w, h };
+    return { x: p.x, y: p.y + 9 * scale - bob * Math.max(0.65, scale), w, h };
+  }
+  function figureBounds(pawn) {
+    return figureBoundsAt(pawn.team, pawn.visualProgress, pawn.x, pawn.y, pawn.bob);
+  }
+  // Shared cue metrics keep the fitted scene extents and the drawn cues in agreement.
+  function cuePad(h) { return Math.max(5, Math.min(10, h * 0.1)); }
+  function cueArrowHeight(h) { return Math.max(9, Math.min(15, h * 0.2)); }
+  function cueTopReach(h) { return cuePad(h) * 0.6 + 4 + cueArrowHeight(h) + 3; }
+  function drawCueMarker(bounds, selected) {
+    const h = bounds.h;
+    const frameTop = bounds.y - h - cuePad(h) * 0.6;
+    const arrowH = cueArrowHeight(h);
+    const apex = frameTop - 4;
+    const cx = bounds.x;
+    ctx.save();
+    if (selected) {
+      // A checkmark badge marks the chosen piece; it stays changeable until the answer.
+      const size = Math.max(10, Math.round(arrowH * 0.86));
+      const radius = size * 0.56;
+      const cy = apex - radius - 1;
+      ctx.beginPath(); ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.fillStyle = '#fff8e0'; ctx.fill();
+      ctx.strokeStyle = '#1a150c'; ctx.lineWidth = 2.2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, radius - 1.4, 0, TAU);
+      ctx.strokeStyle = '#ffe7ab'; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - radius * 0.52, cy + radius * 0.02);
+      ctx.lineTo(cx - radius * 0.12, cy + radius * 0.42);
+      ctx.lineTo(cx + radius * 0.55, cy - radius * 0.38);
+      ctx.strokeStyle = '#315d49'; ctx.lineWidth = Math.max(1.8, radius * 0.3);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+    } else {
+      // Shape cue, not colour alone, marks every truly selectable figure.
+      ctx.beginPath();
+      ctx.moveTo(cx, apex);
+      ctx.lineTo(cx - arrowH * 0.62, apex - arrowH);
+      ctx.lineTo(cx + arrowH * 0.62, apex - arrowH);
+      ctx.closePath();
+      ctx.fillStyle = '#fffbe9'; ctx.fill();
+      ctx.strokeStyle = '#1a150c'; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawFigureCue(bounds, selected) {
+    if (!(bounds.w > 0) || !(bounds.h > 0)) return;
+    const pad = cuePad(bounds.h);
+    const top = bounds.y - bounds.h - pad * 0.6;
+    const left = bounds.x - bounds.w / 2 - pad;
+    const width = bounds.w + pad * 2;
+    const height = bounds.h + pad * 1.1;
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(left, top, width, height, Math.max(4, pad));
+    ctx.fillStyle = selected ? 'rgba(255,224,154,0.40)' : 'rgba(255,247,220,0.34)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(26,21,12,0.88)'; ctx.lineWidth = selected ? 5 : 4.2; ctx.stroke();
+    ctx.strokeStyle = selected ? '#ffe7ab' : '#fffdf2'; ctx.lineWidth = selected ? 2.4 : 2; ctx.stroke();
+    ctx.restore();
+    drawCueMarker(bounds, selected);
   }
   function drawFigure(pawn, bounds, highlighted) {
     if (assets[pawn.team + 1].status !== 'ready') return;
@@ -306,7 +361,76 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     ctx.restore();
   }
   function legal(pawn) {
-    return pawn.progress < 40 && state?.phase === 'playing' && !state.paused && state.awaiting === 'piece' && state.currentPlayer === you && pawn.team === you && state.players?.[you]?.connected && !state.players?.[you]?.isBot && state.legalPieces?.includes(pawn.piece);
+    return pawn.progress < 40 && state?.phase === 'playing' && !state.paused &&
+      (state.awaiting === 'piece' || state.awaiting === 'answer') &&
+      state.currentPlayer === you && pawn.team === you &&
+      state.players?.[you]?.connected && !state.players?.[you]?.isBot &&
+      state.legalPieces?.includes(pawn.piece);
+  }
+  // A hovered or focused button supplies a transient candidate; the state's
+  // selected piece remains the fallback while a question is unanswered.
+  function setPreviewPiece(piece) {
+    if (disposed) return;
+    let next = Number.isInteger(piece) ? piece : null;
+    if (next !== null) {
+      const pawn = Number.isInteger(you) ? pawns[you * 4 + next] : null;
+      if (!pawn || !legal(pawn)) next = null;
+    }
+    if (previewPiece !== next) { previewPiece = next; requestRender(); }
+  }
+  function ghostLanding(pawn) {
+    if (!Number.isInteger(state?.roll) || state.roll < 1 || pawn.progress < 0) return null;
+    const progress = pawn.progress + state.roll;
+    if (progress < 0 || progress > 43) return null;
+    return { progress, point: waypoint(pawn, progress) };
+  }
+  function ghostCandidate() {
+    if (!state || state.phase !== 'playing' || state.paused) return null;
+    if (state.awaiting !== 'piece' && state.awaiting !== 'answer') return null;
+    if (!Number.isInteger(you)) return null;
+    const pieces = [];
+    if (Number.isInteger(previewPiece)) pieces.push(previewPiece);
+    if (state.awaiting === 'answer' && Number.isInteger(state.selectedPiece)) pieces.push(state.selectedPiece);
+    for (const piece of pieces) {
+      const pawn = pawns[you * 4 + piece];
+      if (pawn && legal(pawn)) return pawn;
+    }
+    return null;
+  }
+  // Preview only: never a pick target, never a pawn mutation, never a step sound.
+  function drawGhost(pawn) {
+    const landing = ghostLanding(pawn);
+    if (!landing) return;
+    const asset = assets[pawn.team + 1];
+    if (asset.status !== 'ready') return;
+    const bounds = figureBoundsAt(pawn.team, landing.progress, landing.point.x, landing.point.y);
+    if (!(bounds.w > 0) || !(bounds.h > 0)) return;
+    const flat = 1 / Math.max(0.5, scale);
+    const pad = cuePad(bounds.h);
+    ctx.save(); groundTransform();
+    ellipse(landing.point.x, landing.point.y + 7, 27, 17, 'rgba(255,244,208,0.20)');
+    for (const [color, lineWidth] of [['rgba(26,21,12,0.62)', 5], ['#ffe7ab', 2.4]]) {
+      ctx.beginPath(); ctx.ellipse(landing.point.x, landing.point.y + 7, 25, 16, 0, 0, TAU);
+      ctx.setLineDash([9 * flat, 7 * flat]);
+      ctx.strokeStyle = color; ctx.lineWidth = lineWidth * flat; ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+    const top = bounds.y - bounds.h - pad * 0.6;
+    const left = bounds.x - bounds.w / 2 - pad;
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(left, top, bounds.w + pad * 2, bounds.h + pad * 1.1, Math.max(4, pad));
+    ctx.fillStyle = 'rgba(255,247,220,0.16)'; ctx.fill();
+    ctx.setLineDash([7, 5]);
+    ctx.strokeStyle = 'rgba(26,21,12,0.72)'; ctx.lineWidth = 4.2; ctx.stroke();
+    ctx.strokeStyle = '#fff3cf'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.translate(bounds.x, bounds.y);
+    ctx.drawImage(asset.image, -bounds.w / 2, -bounds.h, bounds.w, bounds.h);
+    ctx.restore();
   }
   function draw(time) {
     frame = 0; if (disposed) return;
@@ -319,24 +443,35 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     const moving = advanceTransition(time);
     drawLabels();
     orderedPawns.sort((a, b) => -0.08 * (a.x - b.x) + 0.78 * (a.y - b.y));
-    const selectedPawn = state?.phase === 'playing' && Number.isInteger(state.selectedPiece) &&
-      (state.awaiting === 'answer' || state.awaiting === 'continue') ? pawns[state.currentPlayer * 4 + state.selectedPiece] : null;
+    const selectedPawn = state?.phase === 'playing' && state.awaiting === 'answer' &&
+      Number.isInteger(state.selectedPiece) ? pawns[state.currentPlayer * 4 + state.selectedPiece] : null;
     for (const pawn of orderedPawns) {
       const selected = pawn === selectedPawn;
       const selectable = legal(pawn);
-      const team = TEAMS[pawn.team];
       const bounds = figureBounds(pawn);
+      const emphasized = selectable || selected;
+      const flat = 1 / Math.max(0.5, scale);
       // Ground shadows and rings flatten with the plane; figures never do.
       ctx.save(); groundTransform();
-      ellipse(pawn.x, pawn.y + 7, 26, 17, selectable || selected ? selected ? '#e7b45b90' : `${team.color}b0` : '#344b4245');
-      if (selectable || selected) {
-        ctx.strokeStyle = selected ? '#b96f21' : team.dark; ctx.lineWidth = 3 / Math.max(0.5, scale); ctx.stroke();
-        ellipse(pawn.x, pawn.y + 7, 20, 12, '#fff4cc90');
-        if (selected) { ctx.strokeStyle = '#a16623'; ctx.lineWidth = 2 / Math.max(0.5, scale); ctx.stroke(); }
+      ellipse(pawn.x, pawn.y + 7, emphasized ? (selected ? 32 : 30) : 26, emphasized ? (selected ? 20 : 19) : 17,
+        emphasized ? (selected ? 'rgba(255,222,148,0.55)' : 'rgba(255,246,216,0.50)') : '#344b4245');
+      if (emphasized) {
+        ellipse(pawn.x, pawn.y + 7, selected ? 23 : 21, selected ? 14 : 13, selected ? '#ffe9b4cc' : '#fffce9ba');
+        ctx.beginPath(); ctx.ellipse(pawn.x, pawn.y + 7, selected ? 26 : 25, selected ? 17 : 16, 0, 0, TAU);
+        ctx.strokeStyle = selected ? '#4a340f' : '#243a2f'; ctx.lineWidth = (selected ? 6 : 5.5) * flat;
+        // A dashed ring is a second, non-colour cue that this piece is selected.
+        if (selected) ctx.setLineDash([9 * flat, 7 * flat]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.ellipse(pawn.x, pawn.y + 7, selected ? 21 : 20, selected ? 13 : 12, 0, 0, TAU);
+        ctx.strokeStyle = selected ? '#ffe7ab' : '#fffdf2'; ctx.lineWidth = 2.6 * flat; ctx.stroke();
       }
       ctx.restore();
-      drawFigure(pawn, bounds, selectable || selected);
+      if (emphasized) drawFigureCue(bounds, selected);
+      drawFigure(pawn, bounds, emphasized);
     }
+    const ghost = ghostCandidate();
+    if (ghost) drawGhost(ghost);
     if (moving) requestRender();
   }
   // Fit actual ground and upright-figure extents, not a letterboxed 1000px square.
@@ -362,7 +497,7 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     const w = Math.max(minimumFigureHeight * 0.66, 86 * s), h = Math.max(minimumFigureHeight, 118 * s);
     for (const p of figurePoints) {
       const swayPadding = h * 0.06 + 10;
-      include(p.x * s - w / 2 - swayPadding, p.y * s + 9 * s - h - 4 * Math.max(0.65, s) - 10);
+      include(p.x * s - w / 2 - swayPadding, p.y * s + 9 * s - h - 4 * Math.max(0.65, s) - cueTopReach(h) - 2);
       include(p.x * s + w / 2 + swayPadding, p.y * s + 9 * s + w * 0.03 + 10);
     }
     if (width >= 600) {
@@ -425,8 +560,17 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     return null;
   }
   const click = (event) => { const pawn = pick(event); if (pawn) onPieceSelect(pawn.piece); };
-  const hover = (event) => { canvas.style.cursor = pick(event) ? 'pointer' : 'default'; };
-  canvas.addEventListener('click', click); canvas.addEventListener('pointermove', hover);
+  const hover = (event) => {
+    const pawn = pick(event);
+    canvas.style.cursor = pawn ? 'pointer' : 'default';
+    const piece = pawn ? pawn.piece : null;
+    if (previewPiece !== piece) { previewPiece = piece; requestRender(); }
+  };
+  const leave = () => {
+    canvas.style.cursor = 'default';
+    if (previewPiece !== null) { previewPiece = null; requestRender(); }
+  };
+  canvas.addEventListener('click', click); canvas.addEventListener('pointermove', hover); canvas.addEventListener('pointerleave', leave);
   const observer = new ResizeObserver(resize); observer.observe(container); resize();
   const motionChanged = () => requestRender(); motion.addEventListener('change', motionChanged);
   artworkChanged();
@@ -445,13 +589,21 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
         } else if (progress !== pawn.progress) {
           changed.push({
             pawn, waypoints: route(pawn.progress, progress), index: 0,
-            direction: progress >= 0 && pawn.progress >= 0 && progress < pawn.progress ? -1 : 1,
             notifyStep: progress >= 0,
           });
         }
         pawn.progress = progress;
       }
+      const previousSelected = state?.selectedPiece;
       state = nextState; you = Number.isInteger(nextYou) ? nextYou : null;
+      // A transient hover cannot survive a phase, turn or question change.
+      const contextKey = `${nextState.phase}|${nextState.awaiting}|${nextState.currentPlayer}|${nextState.pendingQuestion?.id ?? ''}`;
+      if (contextKey !== previewKey || nextState.selectedPiece !== previousSelected) previewPiece = null;
+      previewKey = contextKey;
+      if (previewPiece !== null) {
+        const pawn = Number.isInteger(you) ? pawns[you * 4 + previewPiece] : null;
+        if (!pawn || !legal(pawn)) previewPiece = null;
+      }
       if (changed.length) {
         const captured = nextState.lastFeedback?.captured ?? [];
         const victims = changed.filter(({ pawn }) => pawn.progress === -1 &&
@@ -471,9 +623,11 @@ export function createBoard(container, { onPieceSelect = () => {}, onStatus = ()
     },
     resetCamera() { resize(); },
     setView() { resize(); },
+    setPreviewPiece,
     dispose() {
-      disposed = true; if (frame) cancelAnimationFrame(frame); observer.disconnect();
+      disposed = true; previewPiece = null; if (frame) cancelAnimationFrame(frame); observer.disconnect();
       canvas.removeEventListener('click', click); canvas.removeEventListener('pointermove', hover);
+      canvas.removeEventListener('pointerleave', leave);
       motion.removeEventListener('change', motionChanged); canvas.remove();
     },
   };

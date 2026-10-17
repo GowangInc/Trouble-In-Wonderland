@@ -254,20 +254,13 @@ function scheduleRoll(ctx, voice) {
   }
 }
 
-function scheduleStep(ctx, voice, direction) {
+function scheduleStep(ctx, voice) {
   const when = ctx.currentTime + 0.008;
-  const retreating = direction < 0;
-  const index = stepIndex % STEP_PITCHES.length;
-  const pitch = retreating
-    ? STEP_PITCHES[STEP_PITCHES.length - 1 - index] * 0.65
-    : STEP_PITCHES[index];
-  stepIndex += 1;
-  // Forward hops have a bright upward wooden/bell lift. Retreats use a lower
-  // descending knock, distinct without becoming a harsh punishment sound.
-  // Both keep short, naturally overlapping tails at the 110–140 ms hop pace.
-  tone(ctx, voice, when, pitch * (retreating ? 1.12 : 0.86), 0.2, 0.085, pitch * (retreating ? 0.78 : 1.12));
-  tone(ctx, voice, when, pitch * 2.76, 0.045, 0.12, pitch * (retreating ? 2.3 : 2.95));
-  clack(ctx, voice, when, 0.16, retreating ? 950 : 1400, 0.022);
+  const pitch = STEP_PITCHES[stepIndex++ % STEP_PITCHES.length];
+  // Bright upward wooden/bell notes overlap naturally at the per-space hop pace.
+  tone(ctx, voice, when, pitch * 0.86, 0.2, 0.085, pitch * 1.12);
+  tone(ctx, voice, when, pitch * 2.76, 0.045, 0.12, pitch * 2.95);
+  clack(ctx, voice, when, 0.16, 1400, 0.022);
 }
 
 function scheduleBump(ctx, voice) {
@@ -288,10 +281,10 @@ function scheduleBump(ctx, voice) {
   tone(ctx, voice, when, 280, 0.16, 0.09, 90);
 }
 
-function playEffect(ctx, schedule, direction = 1) {
+function playEffect(ctx, schedule) {
   const voice = createVoice(ctx);
   try {
-    schedule(ctx, voice, direction);
+    schedule(ctx, voice);
   } catch (error) {
     voice.dispose();
     throw error;
@@ -315,11 +308,11 @@ export function playDiceRoll() {
   return roll;
 }
 
-/** Direction +1: forward/entry, -1: retreat. Silent unless already unlocked. */
-export function playStepSound(direction = 1) {
+/** One note per movement step. Silent unless already unlocked. */
+export function playStepSound() {
   const ctx = runningContext();
   if (!ctx) return;
-  try { playEffect(ctx, scheduleStep, direction); } catch { /* animation must remain usable */ }
+  try { playEffect(ctx, scheduleStep); } catch { /* animation must remain usable */ }
 }
 
 /** Already-unlocked contexts only; one call per authoritative capture arrival. */

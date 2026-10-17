@@ -8,9 +8,21 @@ An Alice-in-Wonderland reading-comprehension board game for a classroom local ne
 
 <img src="screenshots/mobile.png" width="300" alt="Phone view with a comprehension question and four answer buttons">
 
-## Start the server
+## Download and start
 
-1. Install [Bun](https://bun.sh/) on the host computer.
+Download a ZIP from the [releases page](https://github.com/GowangInc/Trouble-In-Wonderland/releases/latest), then extract the entire archive. Bun and Node are not required for these downloads.
+
+| Host computer | Download | Launcher |
+| --- | --- | --- |
+| Linux x64, glibc | [Linux ZIP](https://github.com/GowangInc/Trouble-In-Wonderland/releases/download/v1.0.0/wonderland-1.0.0-linux-x64.zip) | `./start-wonderland.sh` |
+| Windows x64 | [Windows ZIP](https://github.com/GowangInc/Trouble-In-Wonderland/releases/download/v1.0.0/wonderland-1.0.0-windows-x64.zip) | `Start Wonderland.cmd` |
+| macOS, Apple Silicon or Intel | [macOS ZIP](https://github.com/GowangInc/Trouble-In-Wonderland/releases/download/v1.0.0/wonderland-1.0.0-macos-universal.zip) | `Start Wonderland.command` |
+
+Keep the launcher terminal open, then open `http://localhost:9276/host` on that computer. The macOS launcher selects the matching executable. Downloads are unsigned and macOS is not notarized; the OS may require manual security approval. No launcher changes security settings. SHA256 files accompany each ZIP.
+
+### Run from source
+
+1. Install [Bun 1.4.3](https://bun.sh/) on the host computer.
 2. Download or clone this repository.
 3. Open a terminal in the game folder.
 4. Run:
@@ -44,19 +56,23 @@ The host overview does not take a student place. A private server-issued browser
 
 Each character has four pieces.
 
-1. Roll **2, 4, or 6** to enter a piece on an empty protected start. Entry needs no question and earns another roll.
-2. To move a piece already on the board, select it before answering its comprehension question.
-3. A correct answer moves that piece forward by the roll. A successful six earns another roll.
-4. A wrong answer moves it backward by the roll, stopping at its own start. A blocked backward landing leaves it in place. A wrong answer ends the turn, including on a six.
-5. Landing on a rival on an ordinary stone bumps it back to its garden. Occupied protected starts block landings. Your own pieces cannot share a space.
+1. Roll **2, 4, or 6** to enter a piece. Your own piece blocks the start; an opponent there is bumped back. Entry needs no question and earns another roll.
+2. Select an on-board piece to reveal its question. Hover or focus a piece to preview its landing. You may switch pieces until submitting an answer; the question and countdown stay the same.
+3. A correct answer moves the final selected piece forward by the roll. A successful six earns another roll.
+4. A wrong answer leaves every piece where it is and ends the turn, including on a six.
+5. Landing on a rival on any track stone, including a start, bumps it back to its garden. Your own pieces cannot share a space.
 6. Land exactly on any free one of your four final safe spots. A safe piece stays there. Do not overshoot the fourth spot.
 7. The first team with all four pieces safe wins. Bots can win too.
 
 Passing occupied spaces is allowed. If no legal action exists, continue to the next turn without a question. Numbered HTML piece buttons and the text board provide an alternative to selecting painted figures.
 
+Each human decision has **30 seconds**. The server rolls automatically, then randomly resolves an unanswered action, piece choice, or question at the next deadline. Continue also advances automatically. Teacher pause freezes the countdown.
+
+Unfinished pieces score their distance travelled. Each piece parked in a final safe spot is worth **80 points**; four safe pieces total **320**. The first team to park all four still wins.
+
 ## Sound and display
 
-Select **Enable sound** in each browser that should play audio. Use **Test sound** to check that device’s volume. Enabled browsers hear every team’s dice, including bot turns, a note for each movement step, and a springy capture sound. Forward and backward steps use different sounds and animations.
+Select **Enable sound** in each browser that should play audio. Use **Test sound** to check that device’s volume. Enabled browsers hear every team’s dice, including bot turns, a note for each movement step, and a springy capture sound.
 
 The painted 2D board has four Wonderland regions and quick per-space hops. Phone layouts keep questions and answer buttons readable. Reduced-motion settings remove movement and tumbling. Both teacher and player pages include expandable classroom and GitHub links with QR codes.
 
@@ -76,4 +92,6 @@ All tables, reservations, and progress live in server memory. A server restart c
 bun test
 ```
 
-Tests cover movement, safe spots, captures, entry bonuses, chapter selection, grouping, reconnects, identity boundaries, and game isolation. Browser checks exercise the live grid, student controls, mobile layout, sound, and QR codes.
+Tests cover movement, safe spots and scoring, captures, entry bonuses, changeable selections, timed human decisions, chapter selection, grouping, reconnects, identity boundaries, and game isolation. Browser checks exercise the live grid, student controls, mobile layout, sound, and QR codes.
+
+Release builds use `bun scripts/build-release.js linux`, `windows`, or `macos`. Run `bun scripts/smoke-release.js <archive.zip>` on the matching OS. The release workflow gates uploads on source tests and extracted-package gameplay checks on Linux, Windows, Apple Silicon, and Intel macOS.

@@ -89,7 +89,7 @@ describe("Wonderland rules", () => {
     expect(game.snapshot().awaiting).toBe("roll");
   });
 
-  test("wrong answer moves only the locked piece backward and forfeits a six bonus", () => {
+  test("wrong answers leave the selected piece in place, capture nobody, and forfeit a six bonus", () => {
     const game = fixture();
     enter(game);
     act(game, "roll");
@@ -105,13 +105,12 @@ describe("Wonderland rules", () => {
     act(game, "roll");
     act(game, "move", { piece: 0 });
     expect(game.snapshot().selectedPiece).toBe(0);
-    expect(() => act(game, "move", { piece: 1 })).toThrow();
     act(game, "answer", { index: 1 });
     const state = game.snapshot();
-    expect(state.players[0].progress).toEqual([6, 0, -1, -1]);
-    expect(state.lastFeedback.movedBack).toBe(6);
+    expect(state.players[0].progress).toEqual([12, 0, -1, -1]);
     expect(state.lastFeedback.correct).toBe(false);
     expect(state.lastFeedback.captured).toEqual([]);
+    expect(state.lastFeedback.piece).toBe(0);
     expect(state.awaiting).toBe("continue");
     expect(state.currentPlayer).toBe(0);
     act(game, "continue");
@@ -125,57 +124,28 @@ describe("Wonderland rules", () => {
     act(game, "move", { piece: 0 });
     act(game, "answer", { index: 1 });
     expect(game.snapshot().players[0].progress).toEqual([0, -1, -1, -1]);
-    expect(game.snapshot().lastFeedback.movedBack).toBe(0);
     expect(game.snapshot().lastFeedback.captured).toEqual([]);
     act(game, "continue");
     expect(game.snapshot().currentPlayer).toBe(1);
   });
 
-  test("a blocked retreat still grades the answer and ends the turn without stacking", () => {
-    const game = fixture();
-    enter(game);
-    for (let moves = 0; moves < 2; moves++) {
-      act(game, "roll");
-      if (game.snapshot().awaiting === "choice") act(game, "choose", { action: "move" });
-      act(game, "move", { piece: 0 });
-      act(game, "answer", { index: 0 });
-      act(game, "continue");
-    }
-    enter(game);
-    act(game, "roll");
-    act(game, "move", { piece: 1 });
-    act(game, "answer", { index: 0 });
-    act(game, "continue");
-    act(game, "roll");
-    act(game, "choose", { action: "move" });
-    act(game, "move", { piece: 0 });
-    act(game, "answer", { index: 1 });
-    expect(game.snapshot().players[0].progress).toEqual([12, 6, -1, -1]);
-    expect(game.snapshot().lastFeedback).toMatchObject({ correct: false, movedBack: 0, retreatBlocked: true, captured: [] });
-    act(game, "continue");
-    expect(game.snapshot().currentPlayer).toBe(1);
-  });
-
-  test("backward movement clamps at the start and obeys shared-track landing rules", () => {
-    expect(movePiece(board([[2, -1, -1, -1]]), 0, 0, 6, -1).players[0].progress[0]).toBe(0);
-    expect(movePiece(board([[], [1, -1, -1, -1]]), 1, 0, 4, -1).players[1].pieces[0]).toBe(10);
-    const players = board([[8, -1, -1, -1], [35, -1, -1, -1]]);
-    const result = movePiece(players, 0, 0, 3, -1);
-    expect(result.players[0].progress[0]).toBe(5);
-    expect(result.players[1].progress[0]).toBe(-1);
-    expect(result.captured).toEqual([{ teamIndex: 1, piece: 0 }]);
+  test("forward landings capture opponents on any shared stone, including marked starts", () => {
+    const players = board([[8, -1, -1, -1], [-1, -1, -1, -1], [30, -1, -1, -1]]);
+    expect(legalPieces(players, 0, 2)).toEqual([0]);
+    const result = movePiece(players, 0, 0, 2);
+    expect(result.players[0].pieces[0]).toBe(10);
+    expect(result.players[2].progress[0]).toBe(-1);
+    expect(result.players[2].pieces[0]).toBe(-1);
+    expect(result.captured).toEqual([{ teamIndex: 2, piece: 0 }]);
     expect(players[0].progress[0]).toBe(8);
-    expect(players[1].progress[0]).toBe(35);
-    expect(legalPieces(board([[13, -1, -1, -1], [0, -1, -1, -1]]), 0, 3, -1)).toEqual([]);
-    expect(legalPieces(board([[8, 5, -1, -1]]), 0, 3, -1)).not.toContain(0);
+    expect(players[2].progress[0]).toBe(30);
+    expect(legalPieces(board([[8, 10, -1, -1]]), 0, 2)).toEqual([1]);
   });
 
-  test("occupied protected starts block entry and landing, but not passing", () => {
-    const players = board([[-1, -1, -1, -1], [30, -1, -1, -1]]);
-    expect(entryAvailable(players, 0)).toBe(false);
-    const landing = board([[8, -1, -1, -1], [0, -1, -1, -1]]);
-    expect(legalPieces(landing, 0, 2)).toEqual([]);
-    expect(legalPieces(landing, 0, 3)).toEqual([0]);
+  test("entry is blocked only by your own start piece, never by rivals", () => {
+    expect(entryAvailable(board([[0, -1, -1, -1]]), 0)).toBe(false);
+    expect(entryAvailable(board([[0, 1, 2, 3]]), 0)).toBe(false);
+    expect(entryAvailable(board([[-1, -1, -1, -1], [30, -1, -1, -1]]), 0)).toBe(true);
     const game = fixture();
     enter(game);
     act(game, "roll");
@@ -201,10 +171,8 @@ describe("Wonderland rules", () => {
       expect(result.players[team].progress[0]).toBe(slot);
       expect(result.players[team].pieces[0]).toBe(slot);
       expect(result.captured).toEqual([]);
-      for (const direction of [1, -1]) {
-        expect(legalPieces(result.players, team, 1, direction)).toEqual([]);
-        expect(() => movePiece(result.players, team, 0, 1, direction)).toThrow();
-      }
+      expect(legalPieces(result.players, team, 1)).toEqual([]);
+      expect(() => movePiece(result.players, team, 0, 1)).toThrow();
     }
   });
 
@@ -247,7 +215,7 @@ describe("Wonderland rules", () => {
     expect(game.nextBotAction()).toMatchObject({ type: "move", piece: 0 });
   });
 
-  test.each([2, 4, 6])("a rival on the protected first space blocks question-free entry on %i", roll => {
+  test.each([2, 4, 6])("entering over a rival on your start captures it and earns the bonus roll on %i", roll => {
     const control = controlledFixture();
     const { game, setRoll } = control;
     setRoll(1);
@@ -267,15 +235,20 @@ describe("Wonderland rules", () => {
     expect(game.snapshot().players[1].pieces[0]).toBe(0);
     setRoll(roll);
     act(game, "roll");
-    expect(game.snapshot().canEnter).toBe(false);
-    expect(game.snapshot().awaiting).toBe("continue");
-    expect(game.snapshot().pendingQuestion).toBeNull();
-    expect(() => act(game, "choose", { action: "enter" })).toThrow();
-    expect(game.snapshot().players[0].progress).toEqual([-1, -1, -1, -1]);
-    expect(game.snapshot().players[1].progress[0]).toBe(30);
+    expect(game.snapshot().canEnter).toBe(true);
+    expect(game.snapshot().awaiting).toBe("choice");
+    act(game, "choose", { action: "enter" });
+    const state = game.snapshot();
+    expect(state.players[0].progress[0]).toBe(0);
+    expect(state.players[1].progress[0]).toBe(-1);
+    expect(state.players[1].pieces[0]).toBe(-1);
+    expect(state.lastFeedback.captured).toEqual([{ teamIndex: 1, piece: 0 }]);
+    expect(state.awaiting).toBe("continue");
+    act(game, "continue");
+    expect(game.snapshot().currentPlayer).toBe(0);
   });
 
-  test.each([true, false])("feedback identifies captures for correct=%s answers", correct => {
+  function captureSetup() {
     const control = controlledFixture();
     const { game, setRoll } = control;
     setRoll(6);
@@ -291,21 +264,36 @@ describe("Wonderland rules", () => {
       act(game, "continue");
     }
     skipGardens(control, 0);
-    if (!correct) {
-      playMove(control, 0, 6);
-      expect(game.snapshot().lastFeedback.captured).toEqual([]);
-      act(game, "continue");
-      expect(game.snapshot().currentPlayer).toBe(0);
-    }
+    return control;
+  }
+
+  test("correct answers capture rivals on the landing stone", () => {
+    const control = captureSetup();
+    const { game } = control;
     const before = game.snapshot();
-    playMove(control, 0, correct ? 4 : 2, correct);
+    playMove(control, 0, 4);
     const state = game.snapshot();
-    expect(state.lastFeedback).toMatchObject({ correct, piece: 0, captured: [{ teamIndex: 1, piece: 0 }] });
+    expect(state.lastFeedback).toMatchObject({ correct: true, piece: 0, captured: [{ teamIndex: 1, piece: 0 }] });
     expect(state.players[0].progress[0]).toBe(17);
     expect(state.players[1].progress[0]).toBe(-1);
     expect(state.players[1].pieces[0]).toBe(-1);
     expect(before.players[1].progress[0]).toBe(7);
-    if (!correct) expect(state.lastFeedback.movedBack).toBe(2);
+    expect(before.players[1].score).toBe(7);
+    expect(state.players[1].score).toBe(0);
+    expect(state.players[0].score).toBe(17);
+    act(game, "continue");
+    expect(game.snapshot().currentPlayer).toBe(1);
+  });
+
+  test("wrong answers never move or capture, even with a rival one roll ahead", () => {
+    const control = captureSetup();
+    const { game } = control;
+    playMove(control, 0, 4, false);
+    const state = game.snapshot();
+    expect(state.lastFeedback).toMatchObject({ correct: false, piece: 0, captured: [] });
+    expect(state.players[0].progress[0]).toBe(13);
+    expect(state.players[1].progress[0]).toBe(7);
+    expect(state.players[1].pieces[0]).toBe(17);
     act(game, "continue");
     expect(game.snapshot().currentPlayer).toBe(1);
   });
@@ -369,6 +357,7 @@ describe("Wonderland rules", () => {
     expect(triedWrongAnswer).toBe(true);
     expect(state.phase).toBe("finished");
     expect(state.winner).toBe(0);
+    expect(state.players[0].score).toBe(320);
     expect(state.awaiting).toBeNull();
     expect([...state.players[0].progress].sort((a, b) => a - b)).toEqual([40, 41, 42, 43]);
     expect(state.players[0].pieces).toEqual(state.players[0].progress);
@@ -526,5 +515,80 @@ describe("Wonderland rules", () => {
     act(game, "move", { piece: 0 });
     expect(Object.keys(game.snapshot().pendingQuestion).sort()).toEqual(["chapter", "id", "options", "prompt"]);
     expect(game.snapshot().lastFeedback).toBeNull();
+  });
+  test.each([true, false])("piece changes keep the question and grade the final selection, correct=%s", correct => {
+    const control = controlledFixture(["alice"]);
+    const { game, setRoll } = control;
+    setRoll(6);
+    enter(game);
+    for (let turn = 0; turn < 2; turn++) {
+      playMove(control, 0, 6);
+      act(game, "continue");
+    }
+    setRoll(6);
+    enter(game);
+    setRoll(6);
+    act(game, "roll");
+    expect(game.snapshot().legalPieces).toEqual([0, 1]);
+    act(game, "move", { piece: 0 });
+    const before = game.snapshot();
+    act(game, "move", { piece: 1 });
+    const selected = game.snapshot();
+    expect(selected.pendingQuestion).toEqual(before.pendingQuestion);
+    expect(selected.players).toEqual(before.players);
+    expect(selected.selectedPiece).toBe(1);
+    expect(selected.legalPieces).toEqual([0, 1]);
+    const answer = selected.pendingQuestion.options.indexOf("Rabbit");
+    act(game, "answer", { index: correct ? answer : (answer + 1) % 4 });
+    expect(game.snapshot().players[0].progress).toEqual(correct ? [12, 6, -1, -1] : [12, 0, -1, -1]);
+    expect(game.snapshot().lastFeedback).toMatchObject({ correct, piece: 1, captured: [] });
+    expect(() => act(game, "move", { piece: 0 })).toThrow();
+    act(game, "continue");
+    expect(game.snapshot().currentPlayer).toBe(correct ? 0 : 1);
+  });
+
+  test.each([40, 41, 42, 43])("safe destination %i is worth exactly 80 points instead of its track distance", slot => {
+    const control = controlledFixture();
+    const { game, setRoll } = control;
+    setRoll(6);
+    enter(game);
+    for (let turn = 0; turn < 6; turn++) {
+      playMove(control, 0, 6);
+      act(game, "continue");
+    }
+    expect(game.snapshot().players[0].score).toBe(36);
+    playMove(control, 0, 1);
+    act(game, "continue");
+    skipGardens(control, 0);
+    expect(game.snapshot().players[0].score).toBe(37);
+    playMove(control, 0, slot - 37);
+    expect(game.snapshot().players[0].progress[0]).toBe(slot);
+    expect(game.snapshot().players[0].score).toBe(80);
+    expect(game.snapshot().players.slice(1).map(player => player.score)).toEqual([0, 0, 0]);
+  });
+
+  test("idle choices are legal and random answers use all four options, including disconnected humans", () => {
+    let random = 0.999;
+    const game = createGame({ questions, random: () => random });
+    game.join("alice");
+    host(game, "start");
+    enter(game);
+    act(game, "roll");
+    act(game, "move", { piece: 0 });
+    const before = game.snapshot();
+    const samples = [0, 0.24999, 0.25, 0.49999, 0.5, 0.74999, 0.75, 0.99999];
+    expect(samples.map(value => { random = value; return game.nextTimeoutAction().index; })).toEqual([0, 0, 1, 1, 2, 2, 3, 3]);
+    host(game, "pause");
+    expect(game.nextTimeoutAction()).toBeNull();
+    host(game, "resume");
+    game.disconnect(0);
+    const action = game.nextTimeoutAction();
+    expect(() => game.dispatch({ playerIndex: 0 }, { ...action, timeout: true })).toThrow();
+    game.dispatch({ playerIndex: 0, timeout: true }, action);
+    expect(game.snapshot().players[0].progress).toEqual(before.players[0].progress);
+    expect(game.snapshot().lastFeedback).toMatchObject({ correct: false, captured: [] });
+    game.setController(0, { connected: true });
+    act(game, "continue");
+    expect(game.snapshot().currentPlayer).toBe(1);
   });
 });

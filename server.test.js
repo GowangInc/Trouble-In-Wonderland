@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { startServer } from "./server.js";
+import questions from "./questions.json" with { type: "json" };
 
 let server;
 let serverProcess;
@@ -16,9 +17,26 @@ beforeEach(async () => {
     let clock = null;
     Date.now = () => clock ?? nativeNow();
     Math.random = () => 0.999;
+    const timers = new Map();
+    const cancelled = [];
+    let nextTimer = 1;
+    globalThis.setTimeout = (callback, delay = 0, ...args) => {
+      const id = nextTimer++;
+      timers.set(id, { at: Date.now() + delay, callback: () => callback(...args) });
+      return id;
+    };
+    globalThis.clearTimeout = id => {
+      if (timers.has(id)) cancelled.push(timers.get(id));
+      timers.delete(id);
+    };
     process.on("message", message => {
-      if (message.type !== "clock") return;
-      clock = message.time;
+      if (message.type === "clock") {
+        clock = message.time;
+        const due = [...timers].filter(([, timer]) => timer.at <= clock).sort((a, b) => a[1].at - b[1].at);
+        for (const [id, timer] of due) if (timers.delete(id)) timer.callback();
+      } else if (message.type === "cancelled") {
+        for (const timer of cancelled.splice(0)) if (timer.at === message.time) timer.callback();
+      } else return;
       process.send({ type: "clock" });
     });
     const { startServer } = await import(${JSON.stringify(new URL("./server.js", import.meta.url).href)});
@@ -37,6 +55,11 @@ beforeEach(async () => {
     setClock(time) {
       const changed = new Promise(resolve => { clockChanged = resolve; });
       serverProcess.send({ type: "clock", time });
+      return changed;
+    },
+    fireCancelled(time) {
+      const changed = new Promise(resolve => { clockChanged = resolve; });
+      serverProcess.send({ type: "cancelled", time });
       return changed;
     },
   };
@@ -292,5 +315,134 @@ describe("automatic classroom tables", () => {
     } finally {
       await preview.stop(true);
     }
+  });
+});
+
+describe("human decision pacing", () => {
+  async function startHuman() {
+    const cookie = await documentCookie();
+    const student = await player(cookie);
+    await choose(student, "alice");
+    const host = await player(await documentCookie(), `/ws?host=1&game=${student.latest.game.id}`);
+    await command(host, "start");
+    await student.next(frame => frame.type === "state" && frame.state.phase === "playing");
+    return { cookie, student, host };
+  }
+  async function enterHuman(student) {
+    await command(student, "roll");
+    await command(student, "choose", { action: "enter" });
+    await command(student, "continue");
+  }
+  async function moveHuman(student) {
+    await command(student, "roll");
+    if (student.latest.state.awaiting === "choice") await command(student, "choose", { action: "move" });
+    await command(student, "move", { piece: 0 });
+    const question = student.latest.state.pendingQuestion;
+    const source = questions.find(item => item.prompt === question.prompt);
+    await command(student, "answer", { index: question.options.indexOf(source.options[source.answer]) });
+    await command(student, "continue");
+  }
+
+  test("human decisions expire at 30 seconds and automatically roll, enter and continue", async () => {
+    const { student, host } = await startHuman();
+    const deadline = student.latest.game.actionDeadline;
+    expect(deadline - student.latest.serverTime).toBe(30_000);
+    await server.setClock(deadline - 1);
+    const before = await player(await documentCookie(), `/ws?host=1&game=${student.latest.game.id}`);
+    expect(before.latest.state.awaiting).toBe("roll");
+    expect(before.latest.game.actionDeadline).toBe(deadline);
+    await server.setClock(deadline);
+    let frame = await student.next(frame => frame.type === "state" && frame.state.awaiting === "choice");
+    expect(frame.state.roll).toBe(6);
+    expect(frame.game.actionDeadline).toBe(deadline + 30_000);
+    await server.setClock(frame.game.actionDeadline);
+    frame = await student.next(frame => frame.type === "state" && frame.state.awaiting === "continue");
+    expect(frame.state.players[0].progress).toEqual([0, -1, -1, -1]);
+    expect(frame.state.pendingQuestion).toBeNull();
+    await server.setClock(frame.game.actionDeadline);
+    frame = await student.next(frame => frame.type === "state" && frame.state.awaiting === "roll");
+    expect(frame.state.currentPlayer).toBe(0);
+    expect(frame.game.actionDeadline - frame.serverTime).toBe(30_000);
+    await host.next(frame => frame.type === "state" && frame.state.version === student.latest.state.version);
+    await command(host, "end");
+    expect(host.latest.game.actionDeadline).toBeNull();
+  });
+
+  test("pause preserves remaining time and queued cancelled callbacks cannot advance a resumed decision", async () => {
+    const { student, host } = await startHuman();
+    const deadline = student.latest.game.actionDeadline;
+    await server.setClock(deadline - 20_000);
+    await command(host, "pause");
+    expect(host.latest.game.actionDeadline).toBeNull();
+    await server.setClock(deadline + 60_000);
+    await command(host, "resume");
+    const resumed = host.latest.game.actionDeadline;
+    expect(resumed).toBe(deadline + 80_000);
+    await server.fireCancelled(deadline);
+    const observer = await player(await documentCookie(), `/ws?host=1&game=${student.latest.game.id}`);
+    expect(observer.latest.state.awaiting).toBe("roll");
+    expect(observer.latest.game.actionDeadline).toBe(resumed);
+    await server.setClock(resumed - 1);
+    expect(observer.latest.state.awaiting).toBe("roll");
+    await server.setClock(resumed);
+    await student.next(frame => frame.type === "state" && frame.state.awaiting === "choice");
+  });
+
+  test("switching pieces and reconnecting keep the same unanswered question and deadline", async () => {
+    const { cookie, student } = await startHuman();
+    await enterHuman(student);
+    await moveHuman(student);
+    await moveHuman(student);
+    await enterHuman(student);
+    await command(student, "roll");
+    await command(student, "move", { piece: 0 });
+    const before = student.latest;
+    await server.setClock(before.game.actionDeadline - 10_000);
+    await command(student, "move", { piece: 1 });
+    expect(student.latest.state.pendingQuestion).toEqual(before.state.pendingQuestion);
+    expect(student.latest.state.selectedPiece).toBe(1);
+    expect(student.latest.game.actionDeadline).toBe(before.game.actionDeadline);
+    const restored = await player(cookie);
+    expect(restored.latest.game.actionDeadline).toBe(before.game.actionDeadline);
+    expect(restored.latest.state.selectedPiece).toBe(1);
+    await server.setClock(before.game.actionDeadline);
+    const answered = await restored.next(frame => frame.type === "state" && frame.state.awaiting === "continue");
+    expect(answered.state.lastFeedback.piece).toBe(1);
+    expect(answered.state.lastFeedback.selectedText).toBe(before.state.pendingQuestion.options[3]);
+    expect(answered.state.players[0].progress[0]).toBe(12);
+    expect(answered.state.players[0].progress[1]).toBe(answered.state.lastFeedback.correct ? 6 : 0);
+  });
+
+  test("a disconnected human still times out without losing their character", async () => {
+    const { student, host } = await startHuman();
+    const deadline = student.latest.game.actionDeadline;
+    await student.close();
+    await host.next(frame => frame.type === "state" && !frame.state.players[0].connected);
+    expect(host.latest.game.actionDeadline).toBe(deadline);
+    await server.setClock(deadline);
+    const rolled = await host.next(frame => frame.type === "state" && frame.state.awaiting === "choice");
+    expect(rolled.state.players[0]).toMatchObject({ isBot: false, connected: false, occupied: true });
+    expect(rolled.state.roll).toBe(6);
+  });
+
+  test("one table's timeout cannot advance another table and resetting cancels the old deadline", async () => {
+    const first = await startHuman();
+    const deadline = first.student.latest.game.actionDeadline;
+    await server.setClock(deadline - 10_000);
+    const second = await startHuman();
+    const other = second.student.latest;
+    await server.setClock(deadline);
+    await first.student.next(frame => frame.type === "state" && frame.state.awaiting === "choice");
+    expect(second.student.latest.state.version).toBe(other.state.version);
+    expect(second.student.latest.state.awaiting).toBe("roll");
+    expect(second.student.latest.game.actionDeadline).toBe(other.game.actionDeadline);
+    const oldDeadline = first.student.latest.game.actionDeadline;
+    await first.host.next(frame => frame.type === "state" && frame.state.version === first.student.latest.state.version);
+    await command(first.host, "reset");
+    expect(first.host.latest.game.actionDeadline).toBeNull();
+    await server.setClock(oldDeadline);
+    const observer = await player(await documentCookie(), `/ws?host=1&game=${first.student.latest.game.id}`);
+    expect(observer.latest.state.phase).toBe("lobby");
+    expect(observer.latest.state.roll).toBeNull();
   });
 });

@@ -22,13 +22,14 @@ Audience: ages 11–14 studying Lewis Carroll’s original *Alice’s Adventures
 ## Turn rules
 
 1. Generate one six-sided die result on the server.
-2. Entry is available on **2, 4, or 6**, only when the protected start is empty and a piece remains in the garden.
+2. Entry is available on **2, 4, or 6** when a piece remains in the garden and no own piece occupies the start. An opponent on the start is captured.
 3. Entry places a piece on that start, requires **no question**, and always earns another roll.
-4. An on-board move requires choosing and locking a legal piece before revealing its question.
-5. A correct answer moves only the selected piece forward by the roll. A successful six earns another roll.
-6. A wrong answer moves only that piece backward by the roll, clamping at its own start. An illegal backward landing leaves it in place. The turn ends, even on a six.
+4. Select a legal on-board piece before revealing the question. Allow changing the selection until submission, without changing the question or restarting its deadline. Hovered and selected pieces show a translucent destination preview.
+5. A correct answer moves only the final selected piece forward by the roll. A successful six earns another roll.
+6. A wrong answer leaves all pieces stationary, captures nobody, and ends the turn even on a six.
 7. Show the selected answer, correct answer, explanation, and result before Continue advances play.
 8. If no legal action exists, show the reason and offer Continue without a question.
+9. Give each human decision 30 seconds. Auto-roll after inactivity; randomly choose a legal action, piece, or answer at subsequent deadlines. Automatically Continue after its deadline. Teacher pause freezes remaining time; switching pieces does not extend it.
 
 Bots use the same entry, movement, question, capture, and bonus rules. Their answers are imperfect. Pace bot actions and stop their timers while paused or finished.
 
@@ -37,9 +38,10 @@ Bots use the same entry, movement, question, capture, and bonus rules. Their ans
 - Forty shared track stones with equal route lengths and four evenly spaced starts.
 - Four distinct final safe spots per team, after the shared track. Landing exactly on any free safe spot parks that piece permanently.
 - Reject moves beyond the fourth safe spot. Passing an occupied space is allowed, including a safe spot.
-- No own-piece stacking. Protected start stones cannot be captured or shared.
-- Landing on an opponent on an ordinary track stone returns that opponent to its garden. Forward and backward landings can capture.
-- First team with all four pieces in its safe spots wins. Bots can win.
+- No own-piece stacking. Marked starts follow the same opponent-capture rule as every other track stone.
+- Landing on an opponent on any shared track stone returns that opponent to its garden.
+- Each final safe piece scores 80 points regardless of which safe slot it occupies. Other pieces score relative track progress; garden pieces score zero. Derive scores from current positions, including captures.
+- First team with all four pieces in its safe spots wins with 320 points. Bots can win.
 - No center HOME label, common finish pile, or visible numeric route or piece labels on the canvas. Preserve exact piece identities and positions in HTML controls and the text board.
 - Four visual regions: Rabbit-Hole Garden, White Rabbit’s Court, Cheshire Wood, and Mad Tea Party. Regional artwork does not change the rules.
 
@@ -72,8 +74,8 @@ Bots use the same entry, movement, question, capture, and bonus rules. Their ans
 
 - Original painted gothic Victorian Wonderland, eerie but inviting and classroom-appropriate. Brighter foliage, porcelain stones, and readable upright character PNGs. No gore, copied commercial assets, or decorative linework frames.
 - Draw regional spaces first, the extracted transparent tea-table foreground above those areas, and selectable figures above the foreground.
-- Animate movement through every traversed space with quick individual hops. Use distinct forward and backward motion. Preserve correct projected hit testing and settled positions.
-- After an explicit local audio-enable gesture, hear every table event in that browser: pop/rattle for human or bot dice, a pleasant note per movement step, and a springy capture sound. Distinguish forward and backward notes.
+- Animate movement through every traversed space with quick individual hops. Preserve correct projected hit testing and settled positions; wrong answers cause no movement.
+- After an explicit local audio-enable gesture, hear every table event in that browser: pop/rattle for human or bot dice, a pleasant note per movement step, and a springy capture sound.
 - Sound controls must report unavailable or blocked audio and include a test action. Never require autoplay or remote samples.
 - Desktop: dominant board, readable current die, and visible turn actions. Mobile: compact overview during questions, readable prompt and four answer targets, no horizontal page overflow.
 - Keyboard alternatives for character selection, roll, piece choice, answers, Continue, and teacher controls. Visible focus, semantic status messages, and a numbered text board.
@@ -85,7 +87,7 @@ Bots use the same entry, movement, question, capture, and bonus rules. Their ans
 - Four chosen characters start immediately. A partial group starts with bots after the one-minute deadline.
 - Returning browsers recover their place without exposing the private identifier. Closed-table returns enter the queue.
 - Multiple live board cards update independently. Opening and controlling one table does not change another.
-- Entry bonuses, occupied starts, wrong-answer retreats, captures, immutable safe spots, overshoot rejection, and winning work for humans and bots.
+- Entry bonuses, own-piece blocking, opponent captures on every track stone, stationary wrong answers, changeable selection with one question/deadline, timed human decisions, immutable safe spots, 80-point safe pieces, overshoot rejection, and winning work for humans and bots.
 - The complete 500-question bank loads, honors chapter settings, and does not leak grading data.
-- Actual browser play verifies layering, projected selection, stepwise animation, directional shared audio, QR decoding, mobile layout, keyboard access, and reduced motion.
-- Publish the project with a simple setup guide and real teacher, desktop, and mobile screenshots. Exclude secrets, runtime data, local capture files, and obsolete assets.
+- Actual browser play verifies layering, projected selection, stepwise animation, shared audio, QR decoding, mobile layout, keyboard access, and reduced motion.
+- Publish the project with a simple setup guide and real teacher, desktop, and mobile screenshots. Provide complete standalone Linux x64, Windows x64, and Apple Silicon/Intel macOS downloads, including a macOS `.command` launcher. Native extracted-package gameplay checks gate publication. Exclude secrets, runtime data, local capture files, and obsolete assets.

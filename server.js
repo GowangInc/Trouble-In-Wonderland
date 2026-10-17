@@ -4,6 +4,7 @@ import questions from "./questions.json" with { type: "json" };
 import { createGame, TEAMS } from "./game.js";
 
 const WAIT_MS = 60_000;
+const TURN_TIMEOUT_MS = 30_000;
 const publicFiles = new Map([
   ["/", "./public/index.html"], ["/index.html", "./public/index.html"],
   ["/host", "./public/host.html"], ["/host.html", "./public/host.html"],
@@ -64,12 +65,13 @@ export function startServer({ port = Number(Bun.env.PORT || 9276), hostname = "0
     const engine = createGame({ questions });
     engine.dispatch({ host: true }, { type: "configure", version: engine.snapshot().version, chapters: chosen });
     const room = { id: randomBytes(12).toString("base64url"), name: name?.trim() || `Table ${++sequence}`,
-      engine, claims: new Set(), sockets: new Set(), fillDeadline: null, fillTimer: null, botTimer: null, graceTimers: new Map() };
+      engine, claims: new Set(), sockets: new Set(), fillDeadline: null, fillTimer: null, botTimer: null, graceTimers: new Map(),
+      actionDeadline: null, actionTimer: null, actionRemaining: null, actionSeq: -1 };
     games.set(room.id, room);
     return room;
   }
   function metadata(room) {
-    return { id: room.id, name: room.name, fillDeadline: room.fillDeadline,
+    return { id: room.id, name: room.name, fillDeadline: room.fillDeadline, actionDeadline: room.actionDeadline,
       assignedHumans: room.claims.size, connectedHumans: [...room.claims].filter(identity => identity.sockets.size > 0).length };
   }
   function monitorFrame() {
@@ -99,7 +101,48 @@ export function startServer({ port = Number(Bun.env.PORT || 9276), hostname = "0
       broadcast(room);
     }, delay);
   }
+  function clearAction(room) {
+    clearTimeout(room.actionTimer);
+    room.actionTimer = null;
+    room.actionDeadline = null;
+    room.actionRemaining = null;
+    room.actionSeq = -1;
+  }
+  // Arms the 30-second idle-human timeout for the pending decision. Keyed on the engine's
+  // decision counter, so reconnects, spectators and unrelated broadcasts never reset it,
+  // while a real action (or a new decision) always earns a fresh timeout.
+  function syncActionTimer(room) {
+    const state = room.engine.snapshot();
+    const pending = !stopped && state.phase === "playing" && state.awaiting !== null && !state.players[state.currentPlayer].isBot;
+    if (!pending) { clearAction(room); return; }
+    if (state.paused) {
+      if (room.actionTimer !== null) {
+        room.actionRemaining = Math.max(0, room.actionDeadline - Date.now());
+        clearTimeout(room.actionTimer);
+        room.actionTimer = null;
+      }
+      room.actionDeadline = null;
+      return;
+    }
+    if (room.actionTimer !== null && room.actionSeq === state.decision) return;
+    clearTimeout(room.actionTimer);
+    const seq = state.decision;
+    const delay = room.actionRemaining ?? TURN_TIMEOUT_MS;
+    room.actionRemaining = null;
+    room.actionDeadline = Date.now() + delay;
+    room.actionSeq = seq;
+    const timer = setTimeout(() => {
+      if (stopped || !games.has(room.id) || room.actionTimer !== timer || room.actionSeq !== seq) return;
+      room.actionTimer = null;
+      const action = room.engine.nextTimeoutAction();
+      if (!action) return;
+      room.engine.dispatch({ playerIndex: room.engine.snapshot().currentPlayer, timeout: true }, action);
+      broadcast(room);
+    }, delay);
+    room.actionTimer = timer;
+  }
   function broadcast(room) {
+    syncActionTimer(room);
     const state = room.engine.snapshot();
     for (const ws of room.sockets) sendState(ws, state);
     scheduleBot(room, state);
@@ -209,6 +252,7 @@ export function startServer({ port = Number(Bun.env.PORT || 9276), hostname = "0
   function disposeRoom(room) {
     clearFill(room);
     clearTimeout(room.botTimer);
+    clearTimeout(room.actionTimer);
     for (const timer of room.graceTimers.values()) clearTimeout(timer);
     room.graceTimers.clear();
   }

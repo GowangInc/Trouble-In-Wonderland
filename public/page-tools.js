@@ -74,7 +74,7 @@ export function createPageTools({ root = document } = {}) {
       if (soundEnabled && generation === soundGeneration) soundFailure(cause);
     });
   }
-  function onStep(direction) { if (!disposed && soundEnabled) playStepSound(direction); }
+  function onStep() { if (!disposed && soundEnabled) playStepSound(); }
   function onBump() { if (!disposed && soundEnabled) playBumpSound(); }
   async function testSound(event) {
     if (!event.isTrusted || testingSound) return;
@@ -83,14 +83,14 @@ export function createPageTools({ root = document } = {}) {
     const generation = soundGeneration;
     try {
       if (!await enableSound()) return;
-      soundStatus('Testing: dice, forward steps, backward steps, then a bump. If silent, check device volume or the browser’s mute setting.');
+      soundStatus('Testing: dice, movement steps, then a bump. If silent, check device volume or the browser’s mute setting.');
       await playDiceRoll();
       await new Promise(resolve => setTimeout(resolve, 500));
       if (generation !== soundGeneration || !soundEnabled) return;
-      for (const direction of [1, 1, -1, -1]) {
+      for (let step = 0; step < 4; step++) {
         await new Promise(resolve => setTimeout(resolve, 280));
         if (generation !== soundGeneration || !soundEnabled) return;
-        onStep(direction);
+        onStep();
       }
       await new Promise(resolve => setTimeout(resolve, 280));
       if (generation === soundGeneration && soundEnabled) {

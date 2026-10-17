@@ -13,51 +13,49 @@ export function encodePosition(teamIndex, progress) {
   return progress < 40 ? (STARTS[teamIndex] + progress) % 40 : progress;
 }
 
-function occupiedTrack(players, square, exceptTeam = -1, exceptPiece = -1) {
-  return players.some((player, team) => player.progress.some((progress, piece) =>
-    !(team === exceptTeam && piece === exceptPiece) && progress >= 0 && progress < 40 && encodePosition(team, progress) === square));
-}
-
 export function entryAvailable(players, teamIndex) {
-  return players[teamIndex].progress.includes(-1) && !occupiedTrack(players, STARTS[teamIndex]);
+  return players[teamIndex].progress.includes(-1) && !players[teamIndex].progress.includes(0);
 }
 
-export function legalPieces(players, teamIndex, roll, direction = 1) {
-  if (!Number.isInteger(roll) || roll < 1 || roll > 6 || (direction !== 1 && direction !== -1)) return [];
+export function legalPieces(players, teamIndex, roll) {
+  if (!Number.isInteger(roll) || roll < 1 || roll > 6) return [];
   const player = players[teamIndex];
   return player.progress.flatMap((progress, piece) => {
     if (progress < 0 || progress >= SAFE_START) return [];
-    const target = Math.max(0, progress + roll * direction);
+    const target = progress + roll;
     if (target > SAFE_END) return [];
     if (player.progress.some((other, index) => index !== piece && other === target)) return [];
-    if (target < 40) {
-      const square = encodePosition(teamIndex, target);
-      if (STARTS.includes(square) && occupiedTrack(players, square, teamIndex, piece)) return [];
-    }
     return [piece];
   });
 }
 
-// Returns a new board; neither the input players nor their piece arrays are changed.
-export function movePiece(players, teamIndex, piece, roll, direction = 1) {
-  if (!legalPieces(players, teamIndex, roll, direction).includes(piece)) throw new Error("That piece cannot make this move.");
-  const next = players.map(player => ({ ...player, progress: [...player.progress], pieces: [...player.pieces] }));
-  const target = Math.max(0, next[teamIndex].progress[piece] + roll * direction);
-  next[teamIndex].progress[piece] = target;
+// Sends every opponent on a shared-track square back to its garden. Callers sync pieces afterward.
+function captureAt(players, teamIndex, square) {
   const captured = [];
-  if (target < 40) {
-    const square = encodePosition(teamIndex, target);
-    next.forEach((player, team) => {
-      if (team === teamIndex) return;
-      player.progress.forEach((progress, index) => {
-        if (progress >= 0 && progress < 40 && encodePosition(team, progress) === square) {
-          player.progress[index] = -1;
-          captured.push({ teamIndex: team, piece: index });
-        }
-      });
+  players.forEach((player, team) => {
+    if (team === teamIndex) return;
+    player.progress.forEach((progress, index) => {
+      if (progress >= 0 && progress < 40 && encodePosition(team, progress) === square) {
+        player.progress[index] = -1;
+        captured.push({ teamIndex: team, piece: index });
+      }
     });
-  }
-  next.forEach((player, team) => { player.pieces = player.progress.map(progress => encodePosition(team, progress)); });
+  });
+  return captured;
+}
+
+function syncPieces(players) {
+  players.forEach((player, team) => { player.pieces = player.progress.map(progress => encodePosition(team, progress)); });
+}
+
+// Returns a new board; neither the input players nor their piece arrays are changed.
+export function movePiece(players, teamIndex, piece, roll) {
+  if (!legalPieces(players, teamIndex, roll).includes(piece)) throw new Error("That piece cannot make this move.");
+  const next = players.map(player => ({ ...player, progress: [...player.progress], pieces: [...player.pieces] }));
+  const target = next[teamIndex].progress[piece] + roll;
+  next[teamIndex].progress[piece] = target;
+  const captured = target < 40 ? captureAt(next, teamIndex, encodePosition(teamIndex, target)) : [];
+  syncPieces(next);
   return { players: next, captured };
 }
 
@@ -76,7 +74,7 @@ export function createGame({ questions, random = Math.random } = {}) {
   }
   const bank = questions.map((question, id) => ({ ...question, options: [...question.options], id: question.id ?? id }));
   let state = {
-    version: 0, phase: "lobby", paused: false, currentPlayer: 0,
+    version: 0, decision: 0, phase: "lobby", paused: false, currentPlayer: 0,
     players: TEAMS.map(emptyPlayer), roll: null, awaiting: null, selectedPiece: null,
     pendingQuestion: null, lastFeedback: null, winner: null,
     message: "Choose an available Wonderland character. Your table starts automatically when ready.",
@@ -94,8 +92,11 @@ export function createGame({ questions, random = Math.random } = {}) {
   }
   function snapshot() {
     const result = structuredClone(state);
+    for (const player of result.players) {
+      player.score = player.progress.reduce((score, progress) => score + (progress < 0 ? 0 : progress >= SAFE_START ? 80 : progress), 0);
+    }
     if (state.phase === "playing" && !state.players[state.currentPlayer].isBot && !state.players[state.currentPlayer].connected) {
-      result.message = `${state.players[state.currentPlayer].name} is disconnected. Waiting for that team to reconnect.`;
+      result.message = `${state.players[state.currentPlayer].name} is disconnected. Their seat is reserved; timed decisions continue automatically.`;
     }
     if (state.paused) result.message = "The host paused the adventure. Your roll, question and selected piece are preserved.";
     return result;
@@ -222,13 +223,15 @@ export function createGame({ questions, random = Math.random } = {}) {
         if (state.paused === paused) throw new Error(paused ? "The adventure is already paused." : "The adventure is not paused.");
         state.paused = paused;
       }
+      if (message.type === "start" || message.type === "end" || message.type === "reset") state.decision += 1;
       changed();
       return;
     }
     if (state.phase !== "playing" || state.paused) throw new Error(state.paused ? "The adventure is paused." : "The adventure is not playing.");
     const team = state.currentPlayer;
     const player = state.players[team];
-    if (!actor || actor.playerIndex !== team || (player.isBot ? !actor.bot : !player.connected)) throw new Error("Wait for your connected team's turn.");
+    if (!actor || actor.playerIndex !== team || (player.isBot ? !actor.bot : !player.connected && !actor.timeout)) throw new Error("Wait for your connected team's turn.");
+    let keepsDecision = false;
     switch (message.type) {
       case "roll": {
         if (state.awaiting !== "roll") throw new Error("It is not time to roll.");
@@ -245,23 +248,27 @@ export function createGame({ questions, random = Math.random } = {}) {
       case "choose": {
         if (state.awaiting !== "choice") throw new Error("There is no action choice awaiting you.");
         if (message.action === "enter") {
-          if (!state.canEnter || !entryAvailable(state.players, team)) throw new Error("Your protected start is occupied; entry is blocked.");
+          if (!state.canEnter || !entryAvailable(state.players, team)) throw new Error("Your own piece already occupies your start; entry is blocked.");
           const piece = player.progress.indexOf(-1);
           player.progress[piece] = 0;
-          player.pieces[piece] = STARTS[team];
+          const captured = captureAt(state.players, team, STARTS[team]);
+          syncPieces(state.players);
           bonusRoll = true;
-          feedback(null, `${player.name} entered piece ${piece + 1} without a question. Entry earns another roll.`, { piece });
+          const captureText = captured.length ? ` Captured ${captured.map(capture => state.players[capture.teamIndex].name).join(" and ")}; their piece returns home.` : "";
+          feedback(null, `${player.name} entered piece ${piece + 1} without a question.${captureText} Entry earns another roll.`, { piece, captured });
         } else if (message.action === "move" && state.legalPieces.length) beginPieceSelection();
         else throw new Error("Choose a legal entry or on-board move.");
         break;
       }
       case "move": {
-        if (state.awaiting !== "piece" || !Number.isInteger(message.piece) || !state.legalPieces.includes(message.piece)) throw new Error("Select one of your legal highlighted pieces.");
+        if ((state.awaiting !== "piece" && state.awaiting !== "answer") || !Number.isInteger(message.piece) || !state.legalPieces.includes(message.piece)) throw new Error("Select one of your legal highlighted pieces.");
+        keepsDecision = state.awaiting === "answer";
         state.selectedPiece = message.piece;
-        drawQuestion();
-        state.awaiting = "answer";
-        state.legalPieces = [];
-        state.message = `${player.name}: piece ${message.piece + 1} is locked. Answer correctly to move it ${state.roll} spaces; a wrong answer moves it back ${state.roll} spaces, stopping at its start.`;
+        if (!keepsDecision) {
+          drawQuestion();
+          state.awaiting = "answer";
+        }
+        state.message = `${player.name}: piece ${message.piece + 1} is selected; you can change pieces until you answer. A correct answer moves it ${state.roll} spaces; a wrong answer leaves it in place.`;
         break;
       }
       case "answer": {
@@ -270,21 +277,8 @@ export function createGame({ questions, random = Math.random } = {}) {
         const correct = message.index === correctAnswer;
         const details = { piece, captured: [], correctText: state.pendingQuestion.options[correctAnswer], selectedText: state.pendingQuestion.options[message.index] };
         if (!correct) {
-          const before = player.progress[piece];
-          const canRetreat = legalPieces(state.players, team, state.roll, -1).includes(piece);
-          let captureText = "";
-          if (canRetreat && before > 0) {
-            const result = movePiece(state.players, team, piece, state.roll, -1);
-            state.players = result.players;
-            details.captured = result.captured;
-            if (result.captured.length) captureText = " A rival was bumped back to its garden.";
-          }
-          const movedBack = before - state.players[team].progress[piece];
-          const penalty = movedBack > 0
-            ? `Piece ${piece + 1} moves back ${movedBack} space${movedBack === 1 ? "" : "s"}${movedBack < state.roll ? ", stopping at its start" : ""}.`
-            : canRetreat ? `Piece ${piece + 1} stays at its start.` : `Piece ${piece + 1} stays put because its backward landing is blocked.`;
           bonusRoll = false;
-          feedback(false, `Not quite. ${penalty}${captureText} ${activeQuestion.explanation} The turn ends, even on a six.`, { ...details, movedBack, retreatBlocked: !canRetreat });
+          feedback(false, `Not quite. Piece ${piece + 1} stays in place. ${activeQuestion.explanation} The turn ends, even on a six.`, details);
         } else {
           const result = movePiece(state.players, team, piece, state.roll);
           state.players = result.players;
@@ -311,6 +305,7 @@ export function createGame({ questions, random = Math.random } = {}) {
       }
       default: throw new Error("Unknown action.");
     }
+    if (!keepsDecision) state.decision += 1;
     changed();
   }
   function nextBotAction() {
@@ -329,5 +324,23 @@ export function createGame({ questions, random = Math.random } = {}) {
       default: return null;
     }
   }
-  return { snapshot, join, disconnect, setController, dispatch, nextBotAction };
+  // Uniform random legal action for an idle human's pending decision; never peeks at the answer key.
+  function nextTimeoutAction() {
+    const player = state.players[state.currentPlayer];
+    if (state.phase !== "playing" || state.paused || !player.occupied || player.isBot) return null;
+    const action = { version: state.version };
+    switch (state.awaiting) {
+      case "roll": return { ...action, type: "roll" };
+      case "choice": {
+        const legal = [...(state.canEnter ? ["enter"] : []), ...(state.legalPieces.length ? ["move"] : [])];
+        return legal.length ? { ...action, type: "choose", action: legal[Math.floor(random() * legal.length)] } : null;
+      }
+      case "piece": return state.legalPieces.length ?
+        { ...action, type: "move", piece: state.legalPieces[Math.floor(random() * state.legalPieces.length)] } : null;
+      case "answer": return { ...action, type: "answer", index: Math.floor(random() * 4) };
+      case "continue": return { ...action, type: "continue" };
+      default: return null;
+    }
+  }
+  return { snapshot, join, disconnect, setController, dispatch, nextBotAction, nextTimeoutAction };
 }
