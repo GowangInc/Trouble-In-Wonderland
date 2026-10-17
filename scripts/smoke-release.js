@@ -1,7 +1,7 @@
 import { lstat, mkdtemp, readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 function assert(value, message) { if (!value) throw new Error(message); }
@@ -38,7 +38,8 @@ for (const entry of entries) {
 }
 const work = await mkdtemp(join(tmpdir(), "wonderland-native-smoke-"));
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-assert(relative(repo, work).startsWith(".."), "Smoke workspace must be outside the checkout");
+const relativeWork = relative(repo, work);
+assert(isAbsolute(relativeWork) || relativeWork === ".." || relativeWork.startsWith(`..${sep}`), "Smoke workspace must be outside the checkout");
 console.log(`Native smoke workspace (retained): ${work}`);
 if (windows) run(["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", '$ErrorActionPreference="Stop"; Expand-Archive -LiteralPath $env:WONDERLAND_ARCHIVE -DestinationPath $env:WONDERLAND_EXTRACT'], { ...env, WONDERLAND_EXTRACT: work });
 else run(["unzip", "-q", archive, "-d", work]);
