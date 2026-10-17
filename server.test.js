@@ -13,9 +13,9 @@ beforeEach(async () => {
   const started = new Promise(resolve => { ready = resolve; });
   // Bun 1.3 can retain closed WebSocket handles. Isolate server lifetime in a process.
   serverProcess = Bun.spawn([process.execPath, "-e", `
-    const nativeNow = Date.now;
-    let clock = null;
-    Date.now = () => clock ?? nativeNow();
+    // Published deadlines and mocked timer registration must use the same clock tick.
+    let clock = Date.now();
+    Date.now = () => clock;
     Math.random = () => 0.999;
     const timers = new Map();
     const cancelled = [];
