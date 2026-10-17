@@ -94,4 +94,4 @@ bun test
 
 Tests cover movement, safe spots and scoring, captures, entry bonuses, changeable selections, timed human decisions, chapter selection, grouping, reconnects, identity boundaries, and game isolation. Browser checks exercise the live grid, student controls, mobile layout, sound, and QR codes.
 
-Release builds use `bun scripts/build-release.js linux`, `windows`, or `macos`. Run `bun scripts/smoke-release.js <archive.zip>` on the matching OS. The release workflow gates uploads on source tests and extracted-package gameplay checks on Linux, Windows, Apple Silicon, and Intel macOS.
+Release builds use `bun scripts/build-release.js linux`, `windows`, or `macos`. Windows builds use the OS-provided `tar.exe` to preserve portable ZIP paths. Run `bun scripts/smoke-release.js <archive.zip>` on the matching OS. The release workflow gates uploads on source tests and extracted-package gameplay checks on Linux, Windows, Apple Silicon, and Intel macOS.

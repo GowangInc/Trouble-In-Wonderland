@@ -121,8 +121,8 @@ await put(bundle, "START-HERE.txt", `Trouble in Wonderland ${version}\n\nExtract
 await put(bundle, "release-manifest.json", JSON.stringify({ schema: 1, version, platform, bun: "1.4.3", commit: run(["git", "rev-parse", "HEAD"], root, true), launcher, executables, questions: { count: questions.length, chapters: 12 }, sources: sourceHashes, assets }, null, 2) + "\n");
 const archive = join(output, `${name}.zip`);
 if (process.platform === "win32") {
-  // Values travel through environment variables, not interpolated PowerShell code.
-  run(["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", '$ErrorActionPreference="Stop"; Compress-Archive -LiteralPath $env:WONDERLAND_PACKAGE -DestinationPath $env:WONDERLAND_ARCHIVE -CompressionLevel Optimal'], packageParent, false, { ...process.env, WONDERLAND_PACKAGE: bundle, WONDERLAND_ARCHIVE: archive });
+  // Compress-Archive stores backslashes; native Windows bsdtar writes portable ZIP paths.
+  run([join(process.env.SystemRoot, "System32", "tar.exe"), "-a", "-cf", archive, name], packageParent);
 } else {
   run(["zip", "-q", "-r", archive, name], packageParent);
 }
